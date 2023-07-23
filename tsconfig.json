@@ -1,0 +1,50 @@
+{
+  "compilerOptions": {
+    // transpile 及び polyfill する対象のECMAScriptのバージョン
+    "target": "ESNext",
+    // Targetのうちで利用する機能を指定する
+    // ブラウザで動作させるので、DOM と DOM.Iterable も指定しておく
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    // トランスパイル時によりES仕様に厳格なコードを生成する
+    // Ecma TC39 以前にTypescriptはclass fieldを導入していたため、
+    // デフォルトでは TC39 の仕様と異なるコードにトランスパイルする
+    // このオプションを有効にすることで、TC39 に準拠したコードにトランスパイルする事が可能。
+    "useDefineForClassFields": true,
+    // モジュールの解決方法を指定する
+    // exModuleInterop を true で運用するため、 ES* でも CommonJS どちらでもOK
+    "module": "ESNext",
+    // 型定義ファイル *.d.ts のチェックをスキップする
+    // vite のデフォルトが true なのでそれに従う
+    "skipLibCheck": true,
+    // CommonJSとESModuleの相互変換を有効にする
+    "esModuleInterop": true,
+
+    /* Bundler */
+    // webpack を利用するので、bunldler を利用
+    "moduleResolution": "bundler",
+    // Json ファイルを import できるようにする
+    "resolveJsonModule": true,
+    // TypeScript Compiler (TSC) 以外のトランスパイラは、
+    // 型システムに基づかずに、単に ts -> js に変換する場合が多い。
+    // そういったケースで問題が生じないように、シングルファイルでの変換に支障のあるコードをエラーとするオプション
+    // vite のデフォルトに従って true にしておく
+    "isolatedModules": true,
+
+    /* Linting */
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+
+    /* React */
+    "jsx": "react-jsx"
+  },
+  "include": ["src/**/*"],
+  // ts-node で実行する場合は、以下の設定が必要
+  "ts-node": {
+    "compilerOptions": {
+      // webpack.config.ts 等の TypeScript で記述した設定ファイルを評価する用
+      "module": "CommonJS"
+    }
+  }
+}

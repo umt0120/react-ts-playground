@@ -22,6 +22,8 @@ export const VideoUploader: React.FC = () => {
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const [frameDataList, setFrameDataList] = useState<FrameData[]>([]);
   const chartRef = useRef<Chart | null>(null);
+  const [videoWidth, setVideoWidth] = useState<number>(0);
+  const [videoHeight, setVideoHeight] = useState<number>(0);
 
   // ファイル入力時のコールバック
   const handleUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -43,6 +45,26 @@ export const VideoUploader: React.FC = () => {
     video.ontimeupdate = () => {
       setCurrentTime(video.currentTime);
     };
+  };
+
+  // カメラアクセス
+  const requestCameraAccess = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      videoRef.current!.srcObject = stream;
+      videoRef.current!.play();
+    } catch (error) {
+      console.error("Error accessing the camera", error);
+    }
+  };
+
+  const handleVideoLoad = () => {
+    if (videoRef.current) {
+      const videoElement = videoRef.current;
+      setVideoWidth(videoElement.videoWidth);
+      setVideoHeight(videoElement.videoHeight);
+
+    }
   };
 
   const handlePlay = () => {
@@ -123,38 +145,42 @@ export const VideoUploader: React.FC = () => {
     canvas.addEventListener("mousemove", handleMouseMove);
     canvas.addEventListener("mouseup", handleMouseUp);
 
-    video.addEventListener("play", function () {
-      const interval = setInterval(function () {
-        context.drawImage(video, 0, 0, canvas.width, canvas.height);
-        context.strokeStyle = "red";
-        context.strokeRect(
-          rectangleRef.current.x,
-          rectangleRef.current.y,
-          rectangleRef.current.width,
-          rectangleRef.current.height,
-        );
+    const drawFrame = () => {
+      if (video.paused || video.ended) return;
 
-        const imageData = context.getImageData(
-          rectangleRef.current.x,
-          rectangleRef.current.y,
-          rectangleRef.current.width,
-          rectangleRef.current.height,
-        );
+      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+      context.strokeStyle = "red";
+      context.strokeRect(
+        rectangleRef.current.x,
+        rectangleRef.current.y,
+        rectangleRef.current.width,
+        rectangleRef.current.height,
+      );
 
-        const averageLuminance = getAverageLuminance(imageData);
-        const currentTimestamp = video.currentTime * 1000; // video currentTime is in seconds
+      const imageData = context.getImageData(
+        rectangleRef.current.x,
+        rectangleRef.current.y,
+        rectangleRef.current.width,
+        rectangleRef.current.height,
+      );
 
-        const frameData: FrameData = {
-          timestamp: currentTimestamp,
-          averageLuminance: averageLuminance,
-        };
-        setFrameDataList((prev) => [...prev, frameData]);
-      }, 20);
+      const averageLuminance = getAverageLuminance(imageData);
+      const currentTimestamp = video.currentTime * 1000; // video currentTime is in seconds
 
-      return () => clearInterval(interval);
-    });
+      const frameData: FrameData = {
+        timestamp: currentTimestamp,
+        averageLuminance: averageLuminance,
+      };
+      setFrameDataList((prev) => [...prev, frameData]);
+
+      // 再帰的に次のフレームの描画をリクエスト
+      requestAnimationFrame(drawFrame);
+    };
+
+    video.addEventListener("play", drawFrame);
 
     return () => {
+      video.removeEventListener("play", drawFrame);
       canvas.removeEventListener("mousedown", handleMouseDown);
       canvas.removeEventListener("mousemove", handleMouseMove);
       canvas.removeEventListener("mouseup", handleMouseUp);
@@ -216,6 +242,8 @@ export const VideoUploader: React.FC = () => {
     <div>
       {/* 画像入力 */}
       <input type="file" accept="video/*" onChange={handleUpload} />
+      {/* カメラアクセス */}
+      <button onClick={requestCameraAccess}>Start Camera</button>
       {/* 再生・停止ボタン */}
       <button onClick={handlePlay}>Play</button>
       <button onClick={handlePause}>Pause</button>
@@ -246,7 +274,16 @@ export const VideoUploader: React.FC = () => {
         </div>
       </div>
       {/* 動画 */}
-      <video ref={videoRef} style={{ display: "none" }} />
+      {/* <video ref={videoRef} style={{ display: "none" }} /> */}
+      <video
+        ref={videoRef}
+        style={{ display: "none" }}
+        width={videoWidth}
+        height={videoHeight}
+        playsInline
+        onLoadedData={handleVideoLoad}
+      />
+
       {/* フレームを描画するCanvas */}
       <canvas ref={canvasRef} width="640" height="480" />
       {/* 輝度グラフ */}

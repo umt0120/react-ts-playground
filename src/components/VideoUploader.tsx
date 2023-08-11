@@ -13,6 +13,18 @@ interface FrameData {
   averageLuminance: number;
 }
 
+type ResizeDirection =
+  | "left"
+  | "right"
+  | "top"
+  | "bottom"
+  | "top-left"
+  | "top-right"
+  | "bottom-left"
+  | "bottom-right"
+  | "inside"
+  | "outside";
+
 export const VideoUploader: React.FC = () => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -24,6 +36,9 @@ export const VideoUploader: React.FC = () => {
   const chartRef = useRef<Chart | null>(null);
   const [videoWidth, setVideoWidth] = useState<number>(0);
   const [videoHeight, setVideoHeight] = useState<number>(0);
+  const [isResizing, setIsResizing] = useState<boolean>(false);
+  const [resizeDirection, setResizeDirection] = useState<ResizeDirection>("outside");
+  const [lastMousePosition, setLastMousePosition] = useState<{ x: number; y: number } | null>(null);
 
   // ファイル入力時のコールバック
   const handleUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -63,7 +78,6 @@ export const VideoUploader: React.FC = () => {
       const videoElement = videoRef.current;
       setVideoWidth(videoElement.videoWidth);
       setVideoHeight(videoElement.videoHeight);
-
     }
   };
 
@@ -100,6 +114,71 @@ export const VideoUploader: React.FC = () => {
     return luminanceSum / (imageData.data.length / 4);
   };
 
+  // マウスカーソルの座標、矩形座標、矩形の枠線の太さをもとにして、カーソル位置と矩形の位置関係を返す関数
+  const getCursorLocation = (
+    mouseX: number,
+    mouseY: number,
+    rectX: number,
+    rectY: number,
+    rectWidth: number,
+    rectHeight: number,
+    borderThickness: number,
+  ) => {
+    const nearLeft = mouseX < rectX + borderThickness;
+    const nearRight = mouseX > rectX + rectWidth - borderThickness;
+    const nearTop = mouseY < rectY + borderThickness;
+    const nearBottom = mouseY > rectY + rectHeight - borderThickness;
+
+    if (nearTop && nearLeft) {
+      return "top-left";
+    } else if (nearTop && nearRight) {
+      return "top-right";
+    } else if (nearBottom && nearLeft) {
+      return "bottom-left";
+    } else if (nearBottom && nearRight) {
+      return "bottom-right";
+    } else if (nearLeft) {
+      return "left";
+    } else if (nearRight) {
+      return "right";
+    } else if (nearTop) {
+      return "top";
+    } else if (nearBottom) {
+      return "bottom";
+    } else if (mouseX >= rectX && mouseX <= rectX + rectWidth && mouseY >= rectY && mouseY <= rectY + rectHeight) {
+      return "inside";
+    } else {
+      return "outside";
+    }
+  };
+
+  const changeCursorStyleOnCanvas = (canvas: HTMLCanvasElement, cursorLocation: ResizeDirection) => {
+    switch (cursorLocation) {
+      case "left":
+      case "right":
+        canvas.style.cursor = "ew-resize";
+        break;
+      case "top":
+      case "bottom":
+        canvas.style.cursor = "ns-resize";
+        break;
+      case "top-left":
+      case "bottom-right":
+        canvas.style.cursor = "nwse-resize";
+        break;
+      case "top-right":
+      case "bottom-left":
+        canvas.style.cursor = "nesw-resize";
+        break;
+      case "inside":
+        canvas.style.cursor = "grab";
+        break;
+      case "outside":
+        canvas.style.cursor = "default";
+        break;
+    }
+  };
+
   useEffect(() => {
     const video = videoRef.current;
     const canvas = canvasRef.current;
@@ -111,34 +190,102 @@ export const VideoUploader: React.FC = () => {
     const rect = canvas.getBoundingClientRect();
 
     const handleMouseDown = (event: MouseEvent) => {
+      // 既存のクリック判定のロジック
       const mouseX = event.clientX - rect.left;
       const mouseY = event.clientY - rect.top;
 
-      if (
-        mouseX >= rectangleRef.current.x &&
-        mouseX <= rectangleRef.current.x + rectangleRef.current.width &&
-        mouseY >= rectangleRef.current.y &&
-        mouseY <= rectangleRef.current.y + rectangleRef.current.height
-      ) {
-        setIsDragging(true);
+      const borderThickness = 5;
+
+      const cursorLocation = getCursorLocation(
+        mouseX,
+        mouseY,
+        rectangleRef.current.x,
+        rectangleRef.current.y,
+        rectangleRef.current.width,
+        rectangleRef.current.height,
+        borderThickness,
+      );
+
+      switch (cursorLocation) {
+        case "left":
+        case "right":
+        case "top":
+        case "bottom":
+        case "top-left":
+        case "top-right":
+        case "bottom-left":
+        case "bottom-right":
+          setIsResizing(true);
+          setResizeDirection(cursorLocation);
+          break;
+        case "inside":
+          setIsDragging(true);
+          break;
+        case "outside":
+          break;
       }
+
+      changeCursorStyleOnCanvas(canvas, cursorLocation);
+      setLastMousePosition({ x: mouseX, y: mouseY });
     };
 
     const handleMouseMove = (event: MouseEvent) => {
       const mouseX = event.clientX - rect.left;
       const mouseY = event.clientY - rect.top;
-
-      if (isDragging) {
+      if (isResizing && resizeDirection) {
+        switch (resizeDirection) {
+          case "left":
+            rectangleRef.current.width += rectangleRef.current.x - mouseX;
+            rectangleRef.current.x = mouseX;
+            break;
+          case "right":
+            rectangleRef.current.width = mouseX - rectangleRef.current.x;
+            break;
+          case "top":
+            rectangleRef.current.height += rectangleRef.current.y - mouseY;
+            rectangleRef.current.y = mouseY;
+            break;
+          case "bottom":
+            rectangleRef.current.height = mouseY - rectangleRef.current.y;
+            break;
+          case "top-left":
+            rectangleRef.current.width += rectangleRef.current.x - mouseX;
+            rectangleRef.current.height += rectangleRef.current.y - mouseY;
+            rectangleRef.current.x = mouseX;
+            rectangleRef.current.y = mouseY;
+            break;
+          case "top-right":
+            rectangleRef.current.width = mouseX - rectangleRef.current.x;
+            rectangleRef.current.height += rectangleRef.current.y - mouseY;
+            rectangleRef.current.y = mouseY;
+            break;
+          case "bottom-left":
+            rectangleRef.current.width += rectangleRef.current.x - mouseX;
+            rectangleRef.current.height = mouseY - rectangleRef.current.y;
+            rectangleRef.current.x = mouseX;
+            break;
+          case "bottom-right":
+            rectangleRef.current.width = mouseX - rectangleRef.current.x;
+            rectangleRef.current.height = mouseY - rectangleRef.current.y;
+            break;
+          default:
+            break;
+        }
+      } else if (isDragging && lastMousePosition) {
         rectangleRef.current = {
           ...rectangleRef.current,
           x: mouseX - rectangleRef.current.width / 2,
           y: mouseY - rectangleRef.current.height / 2,
         };
+        setLastMousePosition({ x: mouseX, y: mouseY });
       }
     };
 
     const handleMouseUp = () => {
       setIsDragging(false);
+      setIsResizing(false);
+      setResizeDirection("outside");
+      setLastMousePosition(null);
     };
 
     canvas.addEventListener("mousedown", handleMouseDown);
@@ -184,8 +331,9 @@ export const VideoUploader: React.FC = () => {
       canvas.removeEventListener("mousedown", handleMouseDown);
       canvas.removeEventListener("mousemove", handleMouseMove);
       canvas.removeEventListener("mouseup", handleMouseUp);
+      canvas.addEventListener("mouseleave", handleMouseUp);
     };
-  }, [isDragging]);
+  }, [isDragging, isResizing]);
 
   useEffect(() => {
     if (chartRef.current === null) {
@@ -274,7 +422,6 @@ export const VideoUploader: React.FC = () => {
         </div>
       </div>
       {/* 動画 */}
-      {/* <video ref={videoRef} style={{ display: "none" }} /> */}
       <video
         ref={videoRef}
         style={{ display: "none" }}

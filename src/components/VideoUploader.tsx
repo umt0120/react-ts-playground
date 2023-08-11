@@ -1,10 +1,16 @@
 import React, { useRef, useEffect, useState } from "react";
+import { Chart } from "chart.js/auto";
 
 interface Rectangle {
   x: number;
   y: number;
   width: number;
   height: number;
+}
+
+interface FrameData {
+  timestamp: number; // milliseconds
+  averageLuminance: number;
 }
 
 export const VideoUploader: React.FC = () => {
@@ -14,7 +20,8 @@ export const VideoUploader: React.FC = () => {
   const [currentTime, setCurrentTime] = useState<number>(0);
   const rectangleRef = useRef<Rectangle>({ x: 50, y: 50, width: 100, height: 100 });
   const [isDragging, setIsDragging] = useState<boolean>(false);
-  const [brightness, setBrightness] = useState<number>(0);
+  const [frameDataList, setFrameDataList] = useState<FrameData[]>([]);
+  const chartRef = useRef<Chart | null>(null);
 
   // ファイル入力時のコールバック
   const handleUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -57,6 +64,18 @@ export const VideoUploader: React.FC = () => {
     if (!video) return;
 
     video.currentTime = Number(event.target.value);
+  };
+
+  const getAverageLuminance = (imageData: ImageData) => {
+    let luminanceSum = 0;
+    for (let i = 0; i < imageData.data.length; i += 4) {
+      const r = imageData.data[i];
+      const g = imageData.data[i + 1];
+      const b = imageData.data[i + 2];
+      const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
+      luminanceSum += luminance;
+    }
+    return luminanceSum / (imageData.data.length / 4);
   };
 
   useEffect(() => {
@@ -121,17 +140,15 @@ export const VideoUploader: React.FC = () => {
           rectangleRef.current.width,
           rectangleRef.current.height,
         );
-        let totalBrightness = 0;
 
-        for (let i = 0; i < imageData.data.length; i += 4) {
-          const r = imageData.data[i];
-          const g = imageData.data[i + 1];
-          const b = imageData.data[i + 2];
+        const averageLuminance = getAverageLuminance(imageData);
+        const currentTimestamp = video.currentTime * 1000; // video currentTime is in seconds
 
-          totalBrightness += 0.299 * r + 0.587 * g + 0.114 * b;
-        }
-
-        setBrightness(totalBrightness / (imageData.data.length / 4));
+        const frameData: FrameData = {
+          timestamp: currentTimestamp,
+          averageLuminance: averageLuminance,
+        };
+        setFrameDataList((prev) => [...prev, frameData]);
       }, 20);
 
       return () => clearInterval(interval);
@@ -144,6 +161,57 @@ export const VideoUploader: React.FC = () => {
     };
   }, [isDragging]);
 
+  useEffect(() => {
+    if (chartRef.current === null) {
+      const ctx = document.getElementById("luminanceChart") as HTMLCanvasElement;
+      chartRef.current = new Chart(ctx, {
+        type: "line",
+        data: {
+          labels: [],
+          datasets: [
+            {
+              label: "Average Luminance",
+              data: [],
+              borderColor: "blue",
+              fill: false,
+            },
+          ],
+        },
+        options: {
+          scales: {
+            x: {
+              type: "linear",
+              position: "bottom",
+              title: {
+                display: true,
+                text: "Timestamp (ms)",
+              },
+            },
+            y: {
+              title: {
+                display: true,
+                text: "Average Luminance",
+              },
+            },
+          },
+        },
+      });
+    }
+  }, []);
+
+  useEffect(() => {
+    if (chartRef.current && frameDataList.length > 0) {
+      const lastFrameData = frameDataList[frameDataList.length - 1];
+
+      chartRef.current.data.datasets[0].data.push({
+        x: lastFrameData.timestamp,
+        y: lastFrameData.averageLuminance,
+      });
+
+      chartRef.current.update();
+    }
+  }, [frameDataList]);
+
   return (
     <div>
       {/* 画像入力 */}
@@ -153,7 +221,7 @@ export const VideoUploader: React.FC = () => {
       <button onClick={handlePause}>Pause</button>
 
       {/* 現在フレームの輝度 */}
-      <p>Brightness: {brightness}</p>
+      <p>Brightness: {frameDataList.length}</p>
 
       <div style={{ width: "640px" }}>
         {/* シークバー */}
@@ -181,6 +249,8 @@ export const VideoUploader: React.FC = () => {
       <video ref={videoRef} style={{ display: "none" }} />
       {/* フレームを描画するCanvas */}
       <canvas ref={canvasRef} width="640" height="480" />
+      {/* 輝度グラフ */}
+      <canvas id="luminanceChart" width="640" height="200"></canvas>
     </div>
   );
 };

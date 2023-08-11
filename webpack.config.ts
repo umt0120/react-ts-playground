@@ -62,7 +62,7 @@ const config: Configuration = {
    * electron のデベロッパーコンソールに 'Uncaught EvalError' が
    * 表示されてしまうことに注意
    */
-  devtool: isDev ? "source-map" : undefined,
+  devtool: isDev ? "inline-source-map" : undefined,
   devServer: {
     static: {
       directory: path.join(__dirname, "dist"),

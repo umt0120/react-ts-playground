@@ -41,6 +41,7 @@ export const VideoUploader: React.FC = () => {
   const [lastMousePosition, setLastMousePosition] = useState<{ x: number; y: number } | null>(null);
   const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([]);
   const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null);
+  const [graphXAxisMax, setGraphXAxisMax] = useState<number>(1);
 
   // ファイル入力時のコールバック
   const handleUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -57,6 +58,8 @@ export const VideoUploader: React.FC = () => {
 
     video.onloadedmetadata = () => {
       setDuration(video.duration);
+      // x軸の最大値（分単位に変換して切り上げ）
+      setGraphXAxisMax(Math.ceil(video.duration / 60.0));
     };
 
     video.ontimeupdate = () => {
@@ -71,10 +74,24 @@ export const VideoUploader: React.FC = () => {
       await navigator.mediaDevices.getUserMedia({ video: true });
       const devices = await navigator.mediaDevices.enumerateDevices();
       setVideoDevices(devices.filter((device) => device.kind === "videoinput"));
+      // とりあえずデフォルト5分
+      setGraphXAxisMax(5);
     } catch (error) {
       console.error("Error accessing the camera", error);
     }
   };
+
+  useEffect(() => {
+    if (
+      chartRef.current &&
+      chartRef.current.options &&
+      chartRef.current.options.scales &&
+      chartRef.current.options.scales.x
+    ) {
+      chartRef.current.options.scales.x.max = graphXAxisMax * 60;
+      chartRef.current.update();
+    }
+  }, [graphXAxisMax]);
 
   useEffect(() => {
     if (videoDevices.length > 0) {
@@ -213,7 +230,8 @@ export const VideoUploader: React.FC = () => {
       const mouseX = event.clientX - rect.left;
       const mouseY = event.clientY - rect.top;
 
-      const borderThickness = 5;
+      // TODO: 画面サイズに応じて変更する必要あり
+      const borderThickness = 2;
 
       const cursorLocation = getCursorLocation(
         mouseX,
@@ -331,7 +349,7 @@ export const VideoUploader: React.FC = () => {
       );
 
       const averageLuminance = getAverageLuminance(imageData);
-      const currentTimestamp = video.currentTime * 1000; // video currentTime is in seconds
+      const currentTimestamp = video.currentTime; // video currentTime is in seconds
 
       const frameData: FrameData = {
         timestamp: currentTimestamp,
@@ -371,6 +389,7 @@ export const VideoUploader: React.FC = () => {
           ],
         },
         options: {
+          animation: false,
           scales: {
             x: {
               type: "linear",
@@ -385,6 +404,8 @@ export const VideoUploader: React.FC = () => {
                 display: true,
                 text: "Average Luminance",
               },
+              min: 0,
+              max: 255,
             },
           },
         },
@@ -420,6 +441,15 @@ export const VideoUploader: React.FC = () => {
       )}
       {/* カメラアクセス */}
       <button onClick={requestCameraAccess}>Start Camera</button>
+      {selectedDeviceId && (
+        <input
+          type="range"
+          min="1"
+          max="10"
+          value={graphXAxisMax}
+          onChange={(event: React.ChangeEvent<HTMLInputElement>) => setGraphXAxisMax(Number(event.target.value))}
+        />
+      )}
       {/* 再生・停止ボタン */}
       <button onClick={handlePlay}>Play</button>
       <button onClick={handlePause}>Pause</button>

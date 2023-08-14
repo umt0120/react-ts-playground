@@ -139,8 +139,8 @@ const calculateDistanceBetweenPointAndRectangleCenter = (
   point: { x: number; y: number },
   rect: { minX: number; minY: number; maxX: number; maxY: number },
 ): number => {
-  const centerX = (rect.maxX - rect.minX) / 2;
-  const centerY = (rect.maxY - rect.minY) / 2;
+  const centerX = (rect.maxX + rect.minX) / 2;
+  const centerY = (rect.maxY + rect.minY) / 2;
   const distanceX = point.x - centerX;
   const distanceY = point.y - centerY;
   return Math.sqrt(distanceX * distanceX + distanceY * distanceY);

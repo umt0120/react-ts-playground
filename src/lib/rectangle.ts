@@ -26,55 +26,61 @@ export const getNearestRectangleId = (
   return { rectangle: nearestRectangleWithDistances.rectangle, mousePosition: mousePosition };
 };
 
+/**
+ * マウスと矩形の位置関係を判定する.
+ *
+ * @param mouseX マウスのX座標
+ * @param mouseY マウスのY座標
+ * @param rectangle 矩形
+ * @returns マウスと矩形の位置関係
+ */
 const getMousePositionRelativeToRectangle = (mouseX: number, mouseY: number, rectangle: Rectangle): MousePosition => {
   const { x, y, width, height, borderThickness } = rectangle;
 
-  // define the corners and edges of the rectangle
-  const topLeft = { x, y };
-  const topRight = { x: x + width, y };
-  const bottomLeft = { x, y: y + height };
-  const bottomRight = { x: x + width, y: y + height };
+  const isWithin = (value: number, start: number, end: number) => value >= start && value <= end;
 
-  // Check the position of the mouse relative to the rectangle
-  if (mouseX < topLeft.x) {
-    if (mouseY < topLeft.y) return MousePosition.TopLeft;
-    if (mouseY > bottomLeft.y) return MousePosition.BottomLeft;
-    if (mouseY >= topLeft.y && mouseY <= topLeft.y + borderThickness) return MousePosition.OnTopLeftCorner;
-    if (mouseY <= bottomLeft.y && mouseY >= bottomLeft.y - borderThickness) return MousePosition.OnBottomLeftCorner;
+  // 左の枠線上 or 外側
+  if (isWithin(mouseX, x, x + borderThickness)) {
+    if (isWithin(mouseY, y, y + borderThickness)) return MousePosition.OnTopLeftCorner;
+    if (isWithin(mouseY, y + borderThickness, y + height - borderThickness)) return MousePosition.OnLeftLine;
+    if (isWithin(mouseY, y + height - borderThickness, y + height)) return MousePosition.OnBottomLeftCorner;
+    if (mouseY < y) return MousePosition.Top;
+    if (mouseY > y + height) return MousePosition.Bottom;
+  }
+
+  // 右の枠線上 or 外側
+  if (isWithin(mouseX, x + width - borderThickness, x + width)) {
+    if (isWithin(mouseY, y, y + borderThickness)) return MousePosition.OnTopRightCorner;
+    if (isWithin(mouseY, y + borderThickness, y + height - borderThickness)) return MousePosition.OnRightLine;
+    if (isWithin(mouseY, y + height - borderThickness, y + height)) return MousePosition.OnBottomRightCorner;
+    if (mouseY < y) return MousePosition.Top;
+    if (mouseY > y + height) return MousePosition.Bottom;
+  }
+
+  // 左右の境界線上 or 内側
+  if (isWithin(mouseX, x + borderThickness, x + width - borderThickness)) {
+    if (isWithin(mouseY, y, y + borderThickness)) return MousePosition.OnTopLine;
+    if (isWithin(mouseY, y + borderThickness, y + height - borderThickness)) return MousePosition.Inside;
+    if (isWithin(mouseY, y + height - borderThickness, y + height)) return MousePosition.OnBottomLine;
+    if (mouseY < y) return MousePosition.Top;
+    if (mouseY > y + height) return MousePosition.Bottom;
+  }
+
+  // 左外
+  if (mouseX < x) {
+    if (mouseY < y) return MousePosition.TopLeft;
+    if (mouseY > y + height) return MousePosition.BottomLeft;
     return MousePosition.Left;
   }
 
-  if (mouseX > topRight.x) {
-    if (mouseY < topRight.y) return MousePosition.TopRight;
-    if (mouseY > bottomRight.y) return MousePosition.BottomRight;
-    if (mouseY >= topRight.y && mouseY <= topRight.y + borderThickness) return MousePosition.OnTopRightCorner;
-    if (mouseY <= bottomRight.y && mouseY >= bottomRight.y - borderThickness) return MousePosition.OnBottomRightCorner;
+  // 右外
+  if (mouseX > x + width) {
+    if (mouseY < y) return MousePosition.TopRight;
+    if (mouseY > y + height) return MousePosition.BottomRight;
     return MousePosition.Right;
   }
 
-  if (mouseY < topLeft.y) {
-    if (mouseX >= topLeft.x && mouseX <= topLeft.x + borderThickness) return MousePosition.OnTopLeftCorner;
-    if (mouseX <= topRight.x && mouseX >= topRight.x - borderThickness) return MousePosition.OnTopRightCorner;
-    return MousePosition.Top;
-  }
-
-  if (mouseY > bottomLeft.y) {
-    if (mouseX >= bottomLeft.x && mouseX <= bottomLeft.x + borderThickness) return MousePosition.OnBottomLeftCorner;
-    if (mouseX <= bottomRight.x && mouseX >= bottomRight.x - borderThickness) return MousePosition.OnBottomRightCorner;
-    return MousePosition.Bottom;
-  }
-
-  if (
-    mouseX >= topLeft.x + borderThickness &&
-    mouseX <= topRight.x - borderThickness &&
-    mouseY >= topLeft.y + borderThickness &&
-    mouseY <= bottomLeft.y - borderThickness
-  ) {
-    return MousePosition.Inside;
-  }
-
-  // Default to inside if none of the above conditions are met
-  return MousePosition.Inside;
+  return MousePosition.OutSide;
 };
 
 /**

@@ -44,6 +44,7 @@ export const MousePosition = {
   Top: "Top",
   OnTopLine: "OnTopLine",
   Inside: "Inside",
+  OutSide: "Outside"
 } as const;
 
 export type MousePosition = (typeof MousePosition)[keyof typeof MousePosition];

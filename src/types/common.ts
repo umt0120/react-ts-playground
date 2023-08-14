@@ -2,6 +2,7 @@ export type Rectangle = {
   id: number;
   name: string;
   color: string;
+  borderThickness: number;
   x: number;
   y: number;
   width: number;
@@ -24,3 +25,25 @@ export type ResizeDirection =
   | "bottom-right"
   | "inside"
   | "outside";
+
+export const MousePosition = {
+  TopLeft: "TopLeft",
+  OnTopLeftCorner: "OnTopLeftCorner",
+  Left: "Left",
+  OnLeftLine: "OnLeftLine",
+  BottomLeft: "BottomLeft",
+  OnBottomLeftCorner: "OnBottomLeftCorner",
+  Bottom: "Bottom",
+  OnBottomLine: "OnBottomLine",
+  BottomRight: "BottomRight",
+  OnBottomRightCorner: "OnBottomRightCorner",
+  Right: "Right",
+  OnRightLine: "OnRightLine",
+  TopRight: "TopRight",
+  OnTopRightCorner: "OnTopRightCorner",
+  Top: "Top",
+  OnTopLine: "OnTopLine",
+  Inside: "Inside",
+} as const;
+
+export type MousePosition = (typeof MousePosition)[keyof typeof MousePosition];

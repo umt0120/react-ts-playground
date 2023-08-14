@@ -1,4 +1,4 @@
-import { Rectangle } from "../types/common";
+import { Rectangle, MousePosition } from "../types/common";
 
 /**
  * 矩形の配列からマウスの座標に最も近い矩形のIDを取得する.
@@ -9,15 +9,72 @@ import { Rectangle } from "../types/common";
  * @param rectangles 矩形の配列
  * @returns マウスの座標に最も近い矩形のID
  */
-export const getNearestRectangleId = (mouseX: number, mouseY: number, rectangles: Rectangle[]): number => {
-  const distancesWithId = calculateDistanceFromEachRectangle(mouseX, mouseY, rectangles);
-  return distancesWithId.sort((a, b) => {
+export const getNearestRectangleId = (
+  mouseX: number,
+  mouseY: number,
+  rectangles: Rectangle[],
+): { rectangle: Rectangle; mousePosition: MousePosition } => {
+  const rectWithDistances = calculateDistanceFromEachRectangle(mouseX, mouseY, rectangles);
+  const nearestRectangleWithDistances = rectWithDistances.sort((a, b) => {
     if (a.distanceToEdge !== b.distanceToEdge) {
       return a.distanceToEdge - b.distanceToEdge;
     }
     // distanceToEdgeが同じ場合は、distanceToCenterの昇順で比較
     return a.distanceToCenter - b.distanceToCenter;
-  })[0].id;
+  })[0];
+  const mousePosition = getMousePositionRelativeToRectangle(mouseX, mouseY, nearestRectangleWithDistances.rectangle);
+  return { rectangle: nearestRectangleWithDistances.rectangle, mousePosition: mousePosition };
+};
+
+const getMousePositionRelativeToRectangle = (mouseX: number, mouseY: number, rectangle: Rectangle): MousePosition => {
+  const { x, y, width, height, borderThickness } = rectangle;
+
+  // define the corners and edges of the rectangle
+  const topLeft = { x, y };
+  const topRight = { x: x + width, y };
+  const bottomLeft = { x, y: y + height };
+  const bottomRight = { x: x + width, y: y + height };
+
+  // Check the position of the mouse relative to the rectangle
+  if (mouseX < topLeft.x) {
+    if (mouseY < topLeft.y) return MousePosition.TopLeft;
+    if (mouseY > bottomLeft.y) return MousePosition.BottomLeft;
+    if (mouseY >= topLeft.y && mouseY <= topLeft.y + borderThickness) return MousePosition.OnTopLeftCorner;
+    if (mouseY <= bottomLeft.y && mouseY >= bottomLeft.y - borderThickness) return MousePosition.OnBottomLeftCorner;
+    return MousePosition.Left;
+  }
+
+  if (mouseX > topRight.x) {
+    if (mouseY < topRight.y) return MousePosition.TopRight;
+    if (mouseY > bottomRight.y) return MousePosition.BottomRight;
+    if (mouseY >= topRight.y && mouseY <= topRight.y + borderThickness) return MousePosition.OnTopRightCorner;
+    if (mouseY <= bottomRight.y && mouseY >= bottomRight.y - borderThickness) return MousePosition.OnBottomRightCorner;
+    return MousePosition.Right;
+  }
+
+  if (mouseY < topLeft.y) {
+    if (mouseX >= topLeft.x && mouseX <= topLeft.x + borderThickness) return MousePosition.OnTopLeftCorner;
+    if (mouseX <= topRight.x && mouseX >= topRight.x - borderThickness) return MousePosition.OnTopRightCorner;
+    return MousePosition.Top;
+  }
+
+  if (mouseY > bottomLeft.y) {
+    if (mouseX >= bottomLeft.x && mouseX <= bottomLeft.x + borderThickness) return MousePosition.OnBottomLeftCorner;
+    if (mouseX <= bottomRight.x && mouseX >= bottomRight.x - borderThickness) return MousePosition.OnBottomRightCorner;
+    return MousePosition.Bottom;
+  }
+
+  if (
+    mouseX >= topLeft.x + borderThickness &&
+    mouseX <= topRight.x - borderThickness &&
+    mouseY >= topLeft.y + borderThickness &&
+    mouseY <= bottomLeft.y - borderThickness
+  ) {
+    return MousePosition.Inside;
+  }
+
+  // Default to inside if none of the above conditions are met
+  return MousePosition.Inside;
 };
 
 /**
@@ -32,7 +89,7 @@ const calculateDistanceFromEachRectangle = (
   mouseX: number,
   mouseY: number,
   rectangles: Rectangle[],
-): { id: number; distanceToEdge: number; distanceToCenter: number }[] => {
+): { rectangle: Rectangle; distanceToEdge: number; distanceToCenter: number }[] => {
   return rectangles.map((rectangle) => {
     // 0はマウスの座標が矩形の内側にあることを表す
     const point = { x: mouseX, y: mouseY };
@@ -45,9 +102,7 @@ const calculateDistanceFromEachRectangle = (
 
     const distanceToEdge = calculateDistanceBetweenPointAndRectangleEdge(point, rect);
     const distanceToCenter = calculateDistanceBetweenPointAndRectangleCenter(point, rect);
-    console.log(distanceToEdge);
-    console.log(distanceToCenter);
-    return { id: rectangle.id, distanceToEdge: distanceToEdge, distanceToCenter: distanceToCenter };
+    return { rectangle: rectangle, distanceToEdge: distanceToEdge, distanceToCenter: distanceToCenter };
   });
 };
 

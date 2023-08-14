@@ -1,36 +1,17 @@
 import React, { useRef, useEffect, useState } from "react";
 import { Chart } from "chart.js/auto";
-
-interface Rectangle {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
-
-interface FrameData {
-  timestamp: number; // milliseconds
-  averageLuminance: number;
-}
-
-type ResizeDirection =
-  | "left"
-  | "right"
-  | "top"
-  | "bottom"
-  | "top-left"
-  | "top-right"
-  | "bottom-left"
-  | "bottom-right"
-  | "inside"
-  | "outside";
+import { Rectangle, FrameData, ResizeDirection } from "../types/common";
 
 export const VideoUploader: React.FC = () => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [duration, setDuration] = useState<number>(0);
   const [currentTime, setCurrentTime] = useState<number>(0);
-  const rectangleRef = useRef<Rectangle>({ x: 50, y: 50, width: 100, height: 100 });
+  // const rectangleRef = useRef<Rectangle>({ x: 50, y: 50, width: 100, height: 100 });
+  const rectangleRef = useRef<Rectangle[]>([
+    { id: 1, name: "Nodule", color: "red", x: 50, y: 50, width: 100, height: 100 },
+    { id: 2, name: "Parenchyma", color: "blue", x: 100, y: 50, width: 100, height: 100 },
+  ]);
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const [frameDataList, setFrameDataList] = useState<FrameData[]>([]);
   const chartRef = useRef<Chart | null>(null);

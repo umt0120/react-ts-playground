@@ -39,6 +39,8 @@ export const VideoUploader: React.FC = () => {
   const [isResizing, setIsResizing] = useState<boolean>(false);
   const [resizeDirection, setResizeDirection] = useState<ResizeDirection>("outside");
   const [lastMousePosition, setLastMousePosition] = useState<{ x: number; y: number } | null>(null);
+  const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([]);
+  const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null);
 
   // ファイル入力時のコールバック
   const handleUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -65,13 +67,20 @@ export const VideoUploader: React.FC = () => {
   // カメラアクセス
   const requestCameraAccess = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-      videoRef.current!.srcObject = stream;
-      videoRef.current!.play();
+      // ユーザにカメラデバイスへのアクセス許可を求める
+      await navigator.mediaDevices.getUserMedia({ video: true });
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      setVideoDevices(devices.filter((device) => device.kind === "videoinput"));
     } catch (error) {
       console.error("Error accessing the camera", error);
     }
   };
+
+  useEffect(() => {
+    if (videoDevices.length > 0) {
+      setSelectedDeviceId(videoDevices[0].deviceId);
+    }
+  }, [videoDevices]);
 
   const handleVideoLoad = () => {
     if (videoRef.current) {
@@ -81,9 +90,15 @@ export const VideoUploader: React.FC = () => {
     }
   };
 
-  const handlePlay = () => {
+  const handlePlay = async () => {
     const video = videoRef.current;
     if (!video) return;
+
+    if (!video!.srcObject && selectedDeviceId) {
+      video!.srcObject = await navigator.mediaDevices.getUserMedia({
+        video: { deviceId: { exact: selectedDeviceId } },
+      });
+    }
 
     video.play();
   };
@@ -100,6 +115,10 @@ export const VideoUploader: React.FC = () => {
     if (!video) return;
 
     video.currentTime = Number(event.target.value);
+  };
+
+  const handleSelectedDeviceIdOnChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
+    setSelectedDeviceId(event.target.value);
   };
 
   const getAverageLuminance = (imageData: ImageData) => {
@@ -390,6 +409,15 @@ export const VideoUploader: React.FC = () => {
     <div>
       {/* 画像入力 */}
       <input type="file" accept="video/*" onChange={handleUpload} />
+      {setVideoDevices.length > 0 && (
+        <select value={selectedDeviceId || ""} onChange={handleSelectedDeviceIdOnChange}>
+          {videoDevices.map((device) => (
+            <option key={device.deviceId} value={device.deviceId}>
+              {device.label}
+            </option>
+          ))}
+        </select>
+      )}
       {/* カメラアクセス */}
       <button onClick={requestCameraAccess}>Start Camera</button>
       {/* 再生・停止ボタン */}

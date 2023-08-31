@@ -58,8 +58,6 @@ export const VideoUploader: React.FC = () => {
   ]);
   // ROIがドラッグ中かどうか
   const [draggingMousePosition, setDraggingMousePosition] = useState<MousePosition>(MousePosition.OutSide);
-  // ROIがリサイズ中かどうか
-  const [isResizing, setIsResizing] = useState<boolean>(false);
 
   // ========== useEffect ==========
   // デバイスが選択されたら、最初のデバイスを選択するuseEffect
@@ -155,7 +153,6 @@ export const VideoUploader: React.FC = () => {
     // マウスアップ時のコールバック
     const handleMouseUp = () => {
       setDraggingMousePosition(MousePosition.OutSide);
-      setIsResizing(false);
     };
 
     // Canvasにイベントリスナーを登録
@@ -214,7 +211,7 @@ export const VideoUploader: React.FC = () => {
       canvas.removeEventListener("mouseup", handleMouseUp);
       canvas.addEventListener("mouseleave", handleMouseUp);
     };
-  }, [draggingMousePosition, isResizing]);
+  }, [draggingMousePosition]);
 
   // 輝度グラフの描画を行うuseEffect
   useEffect(() => {

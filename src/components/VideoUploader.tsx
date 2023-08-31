@@ -56,6 +56,9 @@ export const VideoUploader: React.FC = () => {
       frameData: [],
     },
   ]);
+
+  // ROIの輝度データの総数
+  const totalFrameDataLengths = frameDataList.reduce((prev, current) => prev + current.frameData.length, 0);
   // ROIがドラッグ中かどうか
   const [draggingMousePosition, setDraggingMousePosition] = useState<MousePosition>(MousePosition.OutSide);
 
@@ -153,6 +156,7 @@ export const VideoUploader: React.FC = () => {
     // マウスアップ時のコールバック
     const handleMouseUp = () => {
       setDraggingMousePosition(MousePosition.OutSide);
+      // setIsResizing(false);
     };
 
     // Canvasにイベントリスナーを登録
@@ -290,7 +294,7 @@ export const VideoUploader: React.FC = () => {
       // 輝度グラフを更新
       chartRef.current.update();
     }
-  }, [frameDataList]);
+  }, [totalFrameDataLengths]);
 
   // ========== コールバック関数 ==========
   // ファイル入力時のコールバック

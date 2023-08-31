@@ -57,11 +57,9 @@ export const VideoUploader: React.FC = () => {
     },
   ]);
   // ROIがドラッグ中かどうか
-  const [isDragging, setIsDragging] = useState<boolean>(false);
+  const [draggingMousePosition, setDraggingMousePosition] = useState<MousePosition>(MousePosition.OutSide);
   // ROIがリサイズ中かどうか
   const [isResizing, setIsResizing] = useState<boolean>(false);
-  // マウスの座標
-  const [lastMousePosition, setLastMousePosition] = useState<{ x: number; y: number } | null>(null);
 
   // ========== useEffect ==========
   // デバイスが選択されたら、最初のデバイスを選択するuseEffect
@@ -93,30 +91,9 @@ export const VideoUploader: React.FC = () => {
 
       // マウスの位置から最も近いROIと、当該ROIとマウス座標の位置関係を取得
       const { mousePosition } = getNearestRectangle(mouseX, mouseY, rectangleRef.current);
-
-      switch (mousePosition) {
-        case MousePosition.Inside:
-          // マウスがROI内にある場合はドラッグ開始
-          setIsDragging(true);
-          break;
-        case MousePosition.OnTopLeftCorner:
-        case MousePosition.OnLeftLine:
-        case MousePosition.OnBottomLeftCorner:
-        case MousePosition.OnBottomLine:
-        case MousePosition.OnBottomRightCorner:
-        case MousePosition.OnRightLine:
-        case MousePosition.OnTopRightCorner:
-          // マウスがROIの境界線上にある場合はリサイズ開始
-          setIsResizing(true);
-          break;
-        default:
-          // それ以外は何もしない
-          break;
-      }
+      setDraggingMousePosition(mousePosition);
       // マウスの位置によってカーソルの形状を変更
       changeCursorStyleOnCanvas(canvas, mousePosition);
-      // マウスの位置を記録
-      setLastMousePosition({ x: mouseX, y: mouseY });
     };
 
     // マウス移動時のコールバック
@@ -126,61 +103,59 @@ export const VideoUploader: React.FC = () => {
       const mouseY = event.clientY - rect.top;
 
       // マウスの位置から最も近いROIと、当該ROIとマウス座標の位置関係を取得
-      const { rectangle, mousePosition } = getNearestRectangle(mouseX, mouseY, rectangleRef.current);
+      const { rectangle } = getNearestRectangle(mouseX, mouseY, rectangleRef.current);
 
-      // リサイズ時は、ROIの枠線のどこをドラッグしているか合わせてROIのサイズを変更
-      if (isResizing && mousePosition) {
-        switch (mousePosition) {
-          case MousePosition.OnLeftLine:
-            rectangle.width += rectangle.x - mouseX;
-            rectangle.x = mouseX;
-            break;
-          case MousePosition.OnRightLine:
-            rectangle.width = mouseX - rectangle.x;
-            break;
-          case MousePosition.OnTopLine:
-            rectangle.height += rectangle.y - mouseY;
-            rectangle.y = mouseY;
-            break;
-          case MousePosition.OnBottomLine:
-            rectangle.height = mouseY - rectangle.y;
-            break;
-          case MousePosition.OnTopLeftCorner:
-            rectangle.width += rectangle.x - mouseX;
-            rectangle.height += rectangle.y - mouseY;
-            rectangle.x = mouseX;
-            rectangle.y = mouseY;
-            break;
-          case MousePosition.OnTopRightCorner:
-            rectangle.width = mouseX - rectangle.x;
-            rectangle.height += rectangle.y - mouseY;
-            rectangle.y = mouseY;
-            break;
-          case MousePosition.OnBottomLeftCorner:
-            rectangle.width += rectangle.x - mouseX;
-            rectangle.height = mouseY - rectangle.y;
-            rectangle.x = mouseX;
-            break;
-          case MousePosition.OnBottomRightCorner:
-            rectangle.width = mouseX - rectangle.x;
-            rectangle.height = mouseY - rectangle.y;
-            break;
-          default:
-            break;
-        }
-      } else if (isDragging && lastMousePosition) {
-        // ドラッグ時は、マウスの移動量に合わせてROIの位置を変更
-        rectangle.x = mouseX - rectangle.width / 2;
-        rectangle.y = mouseY - rectangle.height / 2;
-        setLastMousePosition({ x: mouseX, y: mouseY });
+      // マウスダウン時に記憶しておいた、最寄りのROIに対するマウスの位置関係によって処理を分岐
+      switch (draggingMousePosition) {
+        // 枠線上でマウスダウンされていた場合は、ROIのリサイズを行う
+        case MousePosition.OnLeftLine:
+          rectangle.width += rectangle.x - mouseX;
+          rectangle.x = mouseX;
+          break;
+        case MousePosition.OnRightLine:
+          rectangle.width = mouseX - rectangle.x;
+          break;
+        case MousePosition.OnTopLine:
+          rectangle.height += rectangle.y - mouseY;
+          rectangle.y = mouseY;
+          break;
+        case MousePosition.OnBottomLine:
+          rectangle.height = mouseY - rectangle.y;
+          break;
+        case MousePosition.OnTopLeftCorner:
+          rectangle.width += rectangle.x - mouseX;
+          rectangle.height += rectangle.y - mouseY;
+          rectangle.x = mouseX;
+          rectangle.y = mouseY;
+          break;
+        case MousePosition.OnTopRightCorner:
+          rectangle.width = mouseX - rectangle.x;
+          rectangle.height += rectangle.y - mouseY;
+          rectangle.y = mouseY;
+          break;
+        case MousePosition.OnBottomLeftCorner:
+          rectangle.width += rectangle.x - mouseX;
+          rectangle.height = mouseY - rectangle.y;
+          rectangle.x = mouseX;
+          break;
+        case MousePosition.OnBottomRightCorner:
+          rectangle.width = mouseX - rectangle.x;
+          rectangle.height = mouseY - rectangle.y;
+          break;
+        case MousePosition.Inside:
+          // ドラッグ時は、マウスの移動量に合わせてROIの位置を変更
+          rectangle.x = mouseX - rectangle.width / 2;
+          rectangle.y = mouseY - rectangle.height / 2;
+          break;
+        default:
+          break;
       }
     };
 
     // マウスアップ時のコールバック
     const handleMouseUp = () => {
-      setIsDragging(false);
+      setDraggingMousePosition(MousePosition.OutSide);
       setIsResizing(false);
-      setLastMousePosition(null);
     };
 
     // Canvasにイベントリスナーを登録
@@ -239,7 +214,7 @@ export const VideoUploader: React.FC = () => {
       canvas.removeEventListener("mouseup", handleMouseUp);
       canvas.addEventListener("mouseleave", handleMouseUp);
     };
-  }, [isDragging, isResizing]);
+  }, [draggingMousePosition, isResizing]);
 
   // 輝度グラフの描画を行うuseEffect
   useEffect(() => {

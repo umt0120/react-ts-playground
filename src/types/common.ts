@@ -14,17 +14,17 @@ export type FrameData = {
   averageLuminance: number;
 };
 
-export type ResizeDirection =
-  | "left"
-  | "right"
-  | "top"
-  | "bottom"
-  | "top-left"
-  | "top-right"
-  | "bottom-left"
-  | "bottom-right"
-  | "inside"
-  | "outside";
+// export type ResizeDirection =
+//   | "left"
+//   | "right"
+//   | "top"
+//   | "bottom"
+//   | "top-left"
+//   | "top-right"
+//   | "bottom-left"
+//   | "bottom-right"
+//   | "inside"
+//   | "outside";
 
 export const MousePosition = {
   TopLeft: "TopLeft",

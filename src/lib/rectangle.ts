@@ -9,7 +9,7 @@ import { Rectangle, MousePosition } from "../types/common";
  * @param rectangles 矩形の配列
  * @returns マウスの座標に最も近い矩形のID
  */
-export const getNearestRectangleId = (
+export const getNearestRectangle = (
   mouseX: number,
   mouseY: number,
   rectangles: Rectangle[],

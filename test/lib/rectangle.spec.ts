@@ -1,5 +1,5 @@
 import { expect, describe } from "@jest/globals";
-import { getNearestRectangleId } from "../../src/lib/rectangle";
+import { getNearestRectangle } from "../../src/lib/rectangle";
 import { MousePosition } from "../../src/types/common";
 
 describe("getNearestRectangleId: 矩形が1つの場合", () => {
@@ -170,7 +170,7 @@ describe("getNearestRectangleId: 矩形が1つの場合", () => {
   it.each(params)(
     "$description",
     ({ description, mouseX, mouseY, rectangles, expectedRectangleId, expectedMousePosition }) => {
-      const actual = getNearestRectangleId(mouseX, mouseY, rectangles);
+      const actual = getNearestRectangle(mouseX, mouseY, rectangles);
       expect(actual.rectangle.id).toBe(expectedRectangleId);
       expect(actual.mousePosition).toBe(expectedMousePosition);
     },
@@ -247,6 +247,6 @@ describe("getNearestRectangleId: 矩形が複数の場合", () => {
     },
   ];
   it.each(params)("$description", ({ description, mouseX, mouseY, rectangles, expectedRectangleId }) => {
-    expect(getNearestRectangleId(mouseX, mouseY, rectangles).rectangle.id).toBe(expectedRectangleId);
+    expect(getNearestRectangle(mouseX, mouseY, rectangles).rectangle.id).toBe(expectedRectangleId);
   });
 });

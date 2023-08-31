@@ -1,350 +1,238 @@
 import React, { useRef, useEffect, useState } from "react";
 import { Chart } from "chart.js/auto";
-import { Rectangle, FrameData, ResizeDirection } from "../types/common";
+import { Rectangle, FrameData, MousePosition } from "../types/common";
+import { getNearestRectangle } from "../lib/rectangle";
 
 export const VideoUploader: React.FC = () => {
+  // ========== Video関連 ==========
+  // Video要素の参照
   const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [duration, setDuration] = useState<number>(0);
-  const [currentTime, setCurrentTime] = useState<number>(0);
-  // const rectangleRef = useRef<Rectangle>({ x: 50, y: 50, width: 100, height: 100 });
-  const rectangleRef = useRef<Rectangle[]>([
-    { id: 1, name: "Nodule", color: "red", x: 50, y: 50, width: 100, height: 100 },
-    { id: 2, name: "Parenchyma", color: "blue", x: 100, y: 50, width: 100, height: 100 },
-  ]);
-  const [isDragging, setIsDragging] = useState<boolean>(false);
-  const [frameDataList, setFrameDataList] = useState<FrameData[]>([]);
-  const chartRef = useRef<Chart | null>(null);
+  // Video要素の幅
   const [videoWidth, setVideoWidth] = useState<number>(0);
+  // Video要素の高さ
   const [videoHeight, setVideoHeight] = useState<number>(0);
-  const [isResizing, setIsResizing] = useState<boolean>(false);
-  const [resizeDirection, setResizeDirection] = useState<ResizeDirection>("outside");
-  const [lastMousePosition, setLastMousePosition] = useState<{ x: number; y: number } | null>(null);
+  // Videoの長さ
+  const [duration, setDuration] = useState<number>(0);
+  // Video現在の時刻
+  const [currentTime, setCurrentTime] = useState<number>(0);
+
+  // ========== Camera関連 ==========
+  // カメラデバイスのリスト
   const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([]);
+  // 選択されたカメラデバイスのID
   const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null);
+
+  // ========== グラフ関連 ==========
+  // 輝度グラフの参照
+  const chartRef = useRef<Chart | null>(null);
+  // 輝度グラフのx軸の最大値
   const [graphXAxisMax, setGraphXAxisMax] = useState<number>(1);
 
-  // ファイル入力時のコールバック
-  const handleUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
+  // ========== Canvas関連 ==========
+  // Canvas要素の参照
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  // ROIの参照リスト
+  const rectangleRef = useRef<Rectangle[]>([
+    { id: 1, name: "Nodule", color: "red", borderThickness: 2, x: 50, y: 50, width: 100, height: 100 },
+    { id: 2, name: "Parenchyma", color: "blue", borderThickness: 2, x: 100, y: 50, width: 100, height: 100 },
+  ]);
+  // ROIの輝度データ
+  const [frameDataList, setFrameDataList] = useState<{ rectangle: Rectangle; frameData: FrameData[] }[]>([
+    {
+      rectangle: { id: 1, name: "Nodule", color: "red", borderThickness: 2, x: 50, y: 50, width: 100, height: 100 },
+      frameData: [],
+    },
+    {
+      rectangle: {
+        id: 2,
+        name: "Parenchyma",
+        color: "blue",
+        borderThickness: 2,
+        x: 100,
+        y: 50,
+        width: 100,
+        height: 100,
+      },
+      frameData: [],
+    },
+  ]);
+  // ROIがドラッグ中かどうか
+  const [isDragging, setIsDragging] = useState<boolean>(false);
+  // ROIがリサイズ中かどうか
+  const [isResizing, setIsResizing] = useState<boolean>(false);
+  // マウスの座標
+  const [lastMousePosition, setLastMousePosition] = useState<{ x: number; y: number } | null>(null);
 
-    const url = URL.createObjectURL(file);
-
-    const video = videoRef.current;
-    if (!video) return;
-
-    video.src = url;
-    video.load();
-
-    video.onloadedmetadata = () => {
-      setDuration(video.duration);
-      // x軸の最大値（分単位に変換して切り上げ）
-      setGraphXAxisMax(Math.ceil(video.duration / 60.0));
-    };
-
-    video.ontimeupdate = () => {
-      setCurrentTime(video.currentTime);
-    };
-  };
-
-  // カメラアクセス
-  const requestCameraAccess = async () => {
-    try {
-      // ユーザにカメラデバイスへのアクセス許可を求める
-      await navigator.mediaDevices.getUserMedia({ video: true });
-      const devices = await navigator.mediaDevices.enumerateDevices();
-      setVideoDevices(devices.filter((device) => device.kind === "videoinput"));
-      // とりあえずデフォルト5分
-      setGraphXAxisMax(5);
-    } catch (error) {
-      console.error("Error accessing the camera", error);
-    }
-  };
-
-  useEffect(() => {
-    if (
-      chartRef.current &&
-      chartRef.current.options &&
-      chartRef.current.options.scales &&
-      chartRef.current.options.scales.x
-    ) {
-      chartRef.current.options.scales.x.max = graphXAxisMax * 60;
-      chartRef.current.update();
-    }
-  }, [graphXAxisMax]);
-
+  // ========== useEffect ==========
+  // デバイスが選択されたら、最初のデバイスを選択するuseEffect
   useEffect(() => {
     if (videoDevices.length > 0) {
       setSelectedDeviceId(videoDevices[0].deviceId);
     }
   }, [videoDevices]);
 
-  const handleVideoLoad = () => {
-    if (videoRef.current) {
-      const videoElement = videoRef.current;
-      setVideoWidth(videoElement.videoWidth);
-      setVideoHeight(videoElement.videoHeight);
-    }
-  };
-
-  const handlePlay = async () => {
-    const video = videoRef.current;
-    if (!video) return;
-
-    if (!video!.srcObject && selectedDeviceId) {
-      video!.srcObject = await navigator.mediaDevices.getUserMedia({
-        video: { deviceId: { exact: selectedDeviceId } },
-      });
-    }
-
-    video.play();
-  };
-
-  const handlePause = () => {
-    const video = videoRef.current;
-    if (!video) return;
-
-    video.pause();
-  };
-
-  const handleSeekChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const video = videoRef.current;
-    if (!video) return;
-
-    video.currentTime = Number(event.target.value);
-  };
-
-  const handleSelectedDeviceIdOnChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
-    setSelectedDeviceId(event.target.value);
-  };
-
-  const getAverageLuminance = (imageData: ImageData) => {
-    let luminanceSum = 0;
-    for (let i = 0; i < imageData.data.length; i += 4) {
-      const r = imageData.data[i];
-      const g = imageData.data[i + 1];
-      const b = imageData.data[i + 2];
-      const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
-      luminanceSum += luminance;
-    }
-    return luminanceSum / (imageData.data.length / 4);
-  };
-
-  // マウスカーソルの座標、矩形座標、矩形の枠線の太さをもとにして、カーソル位置と矩形の位置関係を返す関数
-  const getCursorLocation = (
-    mouseX: number,
-    mouseY: number,
-    rectX: number,
-    rectY: number,
-    rectWidth: number,
-    rectHeight: number,
-    borderThickness: number,
-  ) => {
-    const nearLeft = mouseX < rectX + borderThickness;
-    const nearRight = mouseX > rectX + rectWidth - borderThickness;
-    const nearTop = mouseY < rectY + borderThickness;
-    const nearBottom = mouseY > rectY + rectHeight - borderThickness;
-
-    if (nearTop && nearLeft) {
-      return "top-left";
-    } else if (nearTop && nearRight) {
-      return "top-right";
-    } else if (nearBottom && nearLeft) {
-      return "bottom-left";
-    } else if (nearBottom && nearRight) {
-      return "bottom-right";
-    } else if (nearLeft) {
-      return "left";
-    } else if (nearRight) {
-      return "right";
-    } else if (nearTop) {
-      return "top";
-    } else if (nearBottom) {
-      return "bottom";
-    } else if (mouseX >= rectX && mouseX <= rectX + rectWidth && mouseY >= rectY && mouseY <= rectY + rectHeight) {
-      return "inside";
-    } else {
-      return "outside";
-    }
-  };
-
-  const changeCursorStyleOnCanvas = (canvas: HTMLCanvasElement, cursorLocation: ResizeDirection) => {
-    switch (cursorLocation) {
-      case "left":
-      case "right":
-        canvas.style.cursor = "ew-resize";
-        break;
-      case "top":
-      case "bottom":
-        canvas.style.cursor = "ns-resize";
-        break;
-      case "top-left":
-      case "bottom-right":
-        canvas.style.cursor = "nwse-resize";
-        break;
-      case "top-right":
-      case "bottom-left":
-        canvas.style.cursor = "nesw-resize";
-        break;
-      case "inside":
-        canvas.style.cursor = "grab";
-        break;
-      case "outside":
-        canvas.style.cursor = "default";
-        break;
-    }
-  };
-
+  // Canvasの描画を行うuseEffect
   useEffect(() => {
+    // Video要素とCanvas要素の参照を取得
     const video = videoRef.current;
     const canvas = canvasRef.current;
     if (!video || !canvas) return;
 
+    // Canvasのコンテキストを取得
     const context = canvas.getContext("2d");
     if (!context) return;
 
+    // Canvasの描画領域を取得
     const rect = canvas.getBoundingClientRect();
 
+    // マウスクリック時のコールバック
     const handleMouseDown = (event: MouseEvent) => {
-      // 既存のクリック判定のロジック
+      //マウスの位置を取得
       const mouseX = event.clientX - rect.left;
       const mouseY = event.clientY - rect.top;
 
-      // TODO: 画面サイズに応じて変更する必要あり
-      const borderThickness = 2;
+      // マウスの位置から最も近いROIと、当該ROIとマウス座標の位置関係を取得
+      const { mousePosition } = getNearestRectangle(mouseX, mouseY, rectangleRef.current);
 
-      const cursorLocation = getCursorLocation(
-        mouseX,
-        mouseY,
-        rectangleRef.current.x,
-        rectangleRef.current.y,
-        rectangleRef.current.width,
-        rectangleRef.current.height,
-        borderThickness,
-      );
-
-      switch (cursorLocation) {
-        case "left":
-        case "right":
-        case "top":
-        case "bottom":
-        case "top-left":
-        case "top-right":
-        case "bottom-left":
-        case "bottom-right":
-          setIsResizing(true);
-          setResizeDirection(cursorLocation);
-          break;
-        case "inside":
+      switch (mousePosition) {
+        case MousePosition.Inside:
+          // マウスがROI内にある場合はドラッグ開始
           setIsDragging(true);
           break;
-        case "outside":
+        case MousePosition.OnTopLeftCorner:
+        case MousePosition.OnLeftLine:
+        case MousePosition.OnBottomLeftCorner:
+        case MousePosition.OnBottomLine:
+        case MousePosition.OnBottomRightCorner:
+        case MousePosition.OnRightLine:
+        case MousePosition.OnTopRightCorner:
+          // マウスがROIの境界線上にある場合はリサイズ開始
+          setIsResizing(true);
+          break;
+        default:
+          // それ以外は何もしない
           break;
       }
-
-      changeCursorStyleOnCanvas(canvas, cursorLocation);
+      // マウスの位置によってカーソルの形状を変更
+      changeCursorStyleOnCanvas(canvas, mousePosition);
+      // マウスの位置を記録
       setLastMousePosition({ x: mouseX, y: mouseY });
     };
 
+    // マウス移動時のコールバック
     const handleMouseMove = (event: MouseEvent) => {
+      //　マウスの位置を取得
       const mouseX = event.clientX - rect.left;
       const mouseY = event.clientY - rect.top;
-      if (isResizing && resizeDirection) {
-        switch (resizeDirection) {
-          case "left":
-            rectangleRef.current.width += rectangleRef.current.x - mouseX;
-            rectangleRef.current.x = mouseX;
+
+      // マウスの位置から最も近いROIと、当該ROIとマウス座標の位置関係を取得
+      const { rectangle, mousePosition } = getNearestRectangle(mouseX, mouseY, rectangleRef.current);
+
+      // リサイズ時は、ROIの枠線のどこをドラッグしているか合わせてROIのサイズを変更
+      if (isResizing && mousePosition) {
+        switch (mousePosition) {
+          case MousePosition.OnLeftLine:
+            rectangle.width += rectangle.x - mouseX;
+            rectangle.x = mouseX;
             break;
-          case "right":
-            rectangleRef.current.width = mouseX - rectangleRef.current.x;
+          case MousePosition.OnRightLine:
+            rectangle.width = mouseX - rectangle.x;
             break;
-          case "top":
-            rectangleRef.current.height += rectangleRef.current.y - mouseY;
-            rectangleRef.current.y = mouseY;
+          case MousePosition.OnTopLine:
+            rectangle.height += rectangle.y - mouseY;
+            rectangle.y = mouseY;
             break;
-          case "bottom":
-            rectangleRef.current.height = mouseY - rectangleRef.current.y;
+          case MousePosition.OnBottomLine:
+            rectangle.height = mouseY - rectangle.y;
             break;
-          case "top-left":
-            rectangleRef.current.width += rectangleRef.current.x - mouseX;
-            rectangleRef.current.height += rectangleRef.current.y - mouseY;
-            rectangleRef.current.x = mouseX;
-            rectangleRef.current.y = mouseY;
+          case MousePosition.OnTopLeftCorner:
+            rectangle.width += rectangle.x - mouseX;
+            rectangle.height += rectangle.y - mouseY;
+            rectangle.x = mouseX;
+            rectangle.y = mouseY;
             break;
-          case "top-right":
-            rectangleRef.current.width = mouseX - rectangleRef.current.x;
-            rectangleRef.current.height += rectangleRef.current.y - mouseY;
-            rectangleRef.current.y = mouseY;
+          case MousePosition.OnTopRightCorner:
+            rectangle.width = mouseX - rectangle.x;
+            rectangle.height += rectangle.y - mouseY;
+            rectangle.y = mouseY;
             break;
-          case "bottom-left":
-            rectangleRef.current.width += rectangleRef.current.x - mouseX;
-            rectangleRef.current.height = mouseY - rectangleRef.current.y;
-            rectangleRef.current.x = mouseX;
+          case MousePosition.OnBottomLeftCorner:
+            rectangle.width += rectangle.x - mouseX;
+            rectangle.height = mouseY - rectangle.y;
+            rectangle.x = mouseX;
             break;
-          case "bottom-right":
-            rectangleRef.current.width = mouseX - rectangleRef.current.x;
-            rectangleRef.current.height = mouseY - rectangleRef.current.y;
+          case MousePosition.OnBottomRightCorner:
+            rectangle.width = mouseX - rectangle.x;
+            rectangle.height = mouseY - rectangle.y;
             break;
           default:
             break;
         }
       } else if (isDragging && lastMousePosition) {
-        rectangleRef.current = {
-          ...rectangleRef.current,
-          x: mouseX - rectangleRef.current.width / 2,
-          y: mouseY - rectangleRef.current.height / 2,
-        };
+        // ドラッグ時は、マウスの移動量に合わせてROIの位置を変更
+        rectangle.x = mouseX - rectangle.width / 2;
+        rectangle.y = mouseY - rectangle.height / 2;
         setLastMousePosition({ x: mouseX, y: mouseY });
       }
     };
 
+    // マウスアップ時のコールバック
     const handleMouseUp = () => {
       setIsDragging(false);
       setIsResizing(false);
-      setResizeDirection("outside");
       setLastMousePosition(null);
     };
 
+    // Canvasにイベントリスナーを登録
     canvas.addEventListener("mousedown", handleMouseDown);
     canvas.addEventListener("mousemove", handleMouseMove);
     canvas.addEventListener("mouseup", handleMouseUp);
 
+    // Canvasの描画 (requestAnimationFrameを使って再帰的に描画)
     const drawFrame = () => {
+      // ビデオが一時停止中または終了している場合は何もしない
       if (video.paused || video.ended) return;
 
+      // Canvasにビデオのフレームを描画
       context.drawImage(video, 0, 0, canvas.width, canvas.height);
-      context.strokeStyle = "red";
-      context.strokeRect(
-        rectangleRef.current.x,
-        rectangleRef.current.y,
-        rectangleRef.current.width,
-        rectangleRef.current.height,
-      );
 
-      const imageData = context.getImageData(
-        rectangleRef.current.x,
-        rectangleRef.current.y,
-        rectangleRef.current.width,
-        rectangleRef.current.height,
-      );
-
-      const averageLuminance = getAverageLuminance(imageData);
-      const currentTimestamp = video.currentTime; // video currentTime is in seconds
-
-      const frameData: FrameData = {
-        timestamp: currentTimestamp,
-        averageLuminance: averageLuminance,
-      };
-      setFrameDataList((prev) => [...prev, frameData]);
-
+      // ビデオの現在の時刻を取得(秒)
+      const currentTimestamp = video.currentTime;
+      // ROIごとに輝度を計算
+      rectangleRef.current.forEach((rectangle) => {
+        // ROIの枠線を描画
+        context.strokeStyle = rectangle.color;
+        context.lineWidth = rectangle.borderThickness;
+        context.strokeRect(rectangle.x, rectangle.y, rectangle.width, rectangle.height);
+        // ROI部分の画像を取得
+        const roi = context.getImageData(rectangle.x, rectangle.y, rectangle.width, rectangle.height);
+        // ROI部分の平均輝度を計算
+        const averageLuminance = getAverageLuminance(roi);
+        // ROIの輝度データ
+        const frameData: FrameData = {
+          timestamp: currentTimestamp,
+          averageLuminance: averageLuminance,
+        };
+        // ROIの輝度データを保存
+        setFrameDataList((prev) => {
+          // idが一致するROIのデータを取得
+          const index = prev.findIndex((data) => data.rectangle.id === rectangle.id);
+          if (index !== -1) {
+            // ROIの輝度データを追加
+            prev[index].frameData.push(frameData);
+          }
+          return prev;
+        });
+      });
       // 再帰的に次のフレームの描画をリクエスト
       requestAnimationFrame(drawFrame);
     };
 
+    // ビデオの再生時にフレームを描画するイベントリスナーを登録
     video.addEventListener("play", drawFrame);
 
     return () => {
+      // コールバック削除
       video.removeEventListener("play", drawFrame);
       canvas.removeEventListener("mousedown", handleMouseDown);
       canvas.removeEventListener("mousemove", handleMouseMove);
@@ -353,21 +241,24 @@ export const VideoUploader: React.FC = () => {
     };
   }, [isDragging, isResizing]);
 
+  // 輝度グラフの描画を行うuseEffect
   useEffect(() => {
-    if (chartRef.current === null) {
+    if (chartRef.current === null && frameDataList.length > 0) {
+      // 輝度グラフへの参照を取得
       const ctx = document.getElementById("luminanceChart") as HTMLCanvasElement;
+      // 輝度グラフのデータ
+      const chartDatasets = frameDataList.map((data) => ({
+        label: data.rectangle.name,
+        data: data.frameData.map((frameData) => ({ x: frameData.timestamp, y: frameData.averageLuminance })),
+        borderColor: data.rectangle.color,
+        fill: false,
+      }));
+      // 輝度グラフを描画
       chartRef.current = new Chart(ctx, {
         type: "line",
         data: {
           labels: [],
-          datasets: [
-            {
-              label: "Average Luminance",
-              data: [],
-              borderColor: "blue",
-              fill: false,
-            },
-          ],
+          datasets: chartDatasets,
         },
         options: {
           animation: false,
@@ -394,18 +285,186 @@ export const VideoUploader: React.FC = () => {
     }
   }, []);
 
+  // x軸の最大値が変更されたら、グラフのx軸の最大値を変更するuseEffect
+  useEffect(() => {
+    if (
+      chartRef.current &&
+      chartRef.current.options &&
+      chartRef.current.options.scales &&
+      chartRef.current.options.scales.x
+    ) {
+      chartRef.current.options.scales.x.max = graphXAxisMax * 60;
+      chartRef.current.update();
+    }
+  }, [graphXAxisMax]);
+
+  // 輝度グラフのデータを更新するuseEffect
   useEffect(() => {
     if (chartRef.current && frameDataList.length > 0) {
-      const lastFrameData = frameDataList[frameDataList.length - 1];
-
-      chartRef.current.data.datasets[0].data.push({
-        x: lastFrameData.timestamp,
-        y: lastFrameData.averageLuminance,
+      // フレームごとの輝度データごとに
+      frameDataList.forEach((data) => {
+        // 輝度グラフのデータを更新
+        chartRef.current?.data.datasets.forEach((dataset) => {
+          // ROIの名前が一致するデータセットを探す
+          if (dataset.label === data.rectangle.name) {
+            // データを更新
+            dataset.data = data.frameData.map((frameData) => ({
+              x: frameData.timestamp,
+              y: frameData.averageLuminance,
+            }));
+          }
+        });
       });
-
+      // 輝度グラフを更新
       chartRef.current.update();
     }
   }, [frameDataList]);
+
+  // ========== コールバック関数 ==========
+  // ファイル入力時のコールバック
+  const handleUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    // ファイルを取得
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // ファイルのURLを取得
+    const url = URL.createObjectURL(file);
+
+    // Video要素の参照を取得
+    const video = videoRef.current;
+    if (!video) return;
+
+    // Video要素にファイルを設定
+    video.src = url;
+    video.load();
+
+    // Video要素のメタデータが読み込まれたら
+    video.onloadedmetadata = () => {
+      // Videoの長さを設定
+      setDuration(video.duration);
+      // x軸の最大値（分単位に変換して切り上げ）を設定
+      setGraphXAxisMax(Math.ceil(video.duration / 60.0));
+    };
+    // Video要素の再生位置が変更されたら
+    video.ontimeupdate = () => {
+      // Videoの現在の時刻を設定
+      setCurrentTime(video.currentTime);
+    };
+  };
+
+  // カメラアクセス時のコールバック
+  const requestCameraAccess = async () => {
+    try {
+      // ユーザにカメラデバイスへのアクセス許可を求める
+      await navigator.mediaDevices.getUserMedia({ video: true });
+      // カメラデバイスのリストを取得
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      // カメラデバイスのリストを設定
+      setVideoDevices(devices.filter((device) => device.kind === "videoinput"));
+      // カメラからの映像取り込み時はデフォルト5分でx軸の最大値を設定する
+      setGraphXAxisMax(5);
+    } catch (error) {
+      console.error("Error accessing the camera", error);
+    }
+  };
+
+  // Video要素の読み込み時のコールバック
+  const handleVideoLoad = () => {
+    if (videoRef.current) {
+      // Video要素の幅と高さを設定
+      const videoElement = videoRef.current;
+      setVideoWidth(videoElement.videoWidth);
+      setVideoHeight(videoElement.videoHeight);
+    }
+  };
+
+  // 再生ボタンクリック時のコールバック
+  const handlePlay = async () => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    // カメラからの映像取り込み時は、選択されたカメラデバイスの映像を取り込む
+    if (!video!.srcObject && selectedDeviceId) {
+      video!.srcObject = await navigator.mediaDevices.getUserMedia({
+        video: { deviceId: { exact: selectedDeviceId } },
+      });
+    }
+
+    // 再生
+    video.play();
+  };
+
+  // 停止ボタンクリック時のコールバック
+  const handlePause = () => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    // 停止
+    video.pause();
+  };
+
+  // シークバー変更時のコールバック
+  const handleSeekChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    // シークバーの値に合わせてビデオの再生位置を変更
+    video.currentTime = Number(event.target.value);
+  };
+
+  // カメラデバイス選択時のコールバック
+  const handleSelectedDeviceIdOnChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
+    // 選択されたカメラデバイスのIDを設定
+    setSelectedDeviceId(event.target.value);
+  };
+
+  // ========== その他の関数 ==========
+  // 画像の平均輝度を計算する関数
+  const getAverageLuminance = (imageData: ImageData) => {
+    let luminanceSum = 0;
+    for (let i = 0; i < imageData.data.length; i += 4) {
+      const r = imageData.data[i];
+      const g = imageData.data[i + 1];
+      const b = imageData.data[i + 2];
+      const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
+      luminanceSum += luminance;
+    }
+    return luminanceSum / (imageData.data.length / 4);
+  };
+
+  // マウスの位置によってカーソルの形状を変更する関数
+  const changeCursorStyleOnCanvas = (canvas: HTMLCanvasElement, mousePosition: MousePosition) => {
+    switch (mousePosition) {
+      case MousePosition.OnLeftLine:
+      case MousePosition.OnRightLine:
+        // 左側・右側の境界線上にマウスがある場合は左右リサイズカーソル
+        canvas.style.cursor = "ew-resize";
+        break;
+      case MousePosition.OnTopLine:
+      case MousePosition.OnBottomLine:
+        // 上側・下側の境界線上にマウスがある場合は上下リサイズカーソル
+        canvas.style.cursor = "ns-resize";
+        break;
+      case MousePosition.OnTopLeftCorner:
+      case MousePosition.OnBottomRightCorner:
+        // 左上・右下の境界線上にマウスがある場合は左上右下リサイズカーソル
+        canvas.style.cursor = "nwse-resize";
+        break;
+      case MousePosition.OnTopRightCorner:
+      case MousePosition.OnBottomLeftCorner:
+        // 右上・左下の境界線上にマウスがある場合は右上左下リサイズカーソル
+        canvas.style.cursor = "nesw-resize";
+        break;
+      case MousePosition.Inside:
+        // ROI内にマウスがある場合はドラッグカーソル
+        canvas.style.cursor = "grab";
+        break;
+      default:
+        // それ以外はデフォルトカーソル
+        canvas.style.cursor = "default";
+        break;
+    }
+  };
 
   return (
     <div>

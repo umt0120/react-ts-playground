@@ -35,7 +35,18 @@ const config: Configuration = {
         test: /\.css$/,
         // use 配列に指定したローダーは *最後尾から* 順に適用される
         // セキュリティ対策のため style-loader は使用しない
-        use: [MiniCssExtractPlugin.loader, "css-loader"],
+        use: [
+          {
+            loader: MiniCssExtractPlugin.loader,
+          },
+          {
+            loader: "css-loader",
+          },
+          {
+            loader: "postcss-loader",
+            options: { postcssOptions: { plugins: ["TailwindCSS"] } },
+          }
+        ],
       },
       {
         // 画像やフォントなどのアセット類

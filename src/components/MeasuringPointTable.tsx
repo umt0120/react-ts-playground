@@ -1,7 +1,9 @@
 import { MeasuringPoint } from "../types/common";
+import { MeasuringPointRow } from "./MeasuringPointRow";
 
 type Props = {
   measuringPoints: MeasuringPoint[];
+  selectedMeasuringPointId: number | null;
   setSelectedMeasuringPointId: (id: number) => void;
 };
 
@@ -18,23 +20,14 @@ export const MeasuringPointTable = (props: Props) => {
       </thead>
       <tbody>
         {props.measuringPoints.map((point) => (
-          <tr
+          <MeasuringPointRow
             key={point.id}
-            id={"measuring-point-" + point.id}
-            onClick={() => {
-              const elm = document.getElementById("measuring-point-" + point.id);
-              elm?.style.setProperty("background-color", "red");
-              props.setSelectedMeasuringPointId(point.id);
-            }}
-          >
-            <td>{point.name}</td>
-            <td>{point.x}</td>
-            <td>{point.y}</td>
-          </tr>
+            point={point}
+            selectedMeasuringPointId={props.selectedMeasuringPointId}
+            setSelectedMeasuringPointId={props.setSelectedMeasuringPointId}
+          />
         ))}
       </tbody>
     </table>
   );
 };
-
-

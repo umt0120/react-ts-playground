@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useState } from "react";
 // import { Chart } from "chart.js/auto";
-import { Chart, registerables } from "chart.js";
+import { Chart, ChartEvent, registerables } from "chart.js";
 import { Rectangle, FrameData, MousePosition, MeasuringPoint } from "../types/common";
 import { getNearestRectangle } from "../lib/rectangle";
 // import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, LineController } from "chart.js";
@@ -282,18 +282,7 @@ export const VideoUploader: React.FC = () => {
               max: 255,
             },
           },
-          onClick: (event) => {
-            if (!chartRef.current) return;
-
-            // FIXME: Chart初期化時の処理をオブジェクトベタ書きしているため、型エラーが出る。後で直す
-            // @ts-expect-error
-            const canvasPosition = getRelativePosition(event, chartRef.current);
-
-            // Substitute the appropriate scale IDs
-            const dataX = chartRef.current.scales.x.getValueForPixel(canvasPosition.x);
-            const dataY = chartRef.current.scales.y.getValueForPixel(canvasPosition.y);
-            console.log(dataX, dataY);
-          },
+          onClick: graphOnClick,
         },
       });
     }
@@ -488,14 +477,25 @@ export const VideoUploader: React.FC = () => {
   };
 
   // 計測点の情報を更新する関数
-  const updateMeasuringPoint = (measuringPoint: MeasuringPoint) => {
-    setMeasuringPoints((prev) => {
-      const index = prev.findIndex((point) => point.id === measuringPoint.id);
-      if (index !== -1) {
-        prev[index] = measuringPoint;
-      }
-      return prev;
-    });
+  const updateMeasuringPoint = (x: number, y: number) => {
+    const updatedMeasuringPoints = measuringPoints.map((point) =>
+      point.id === selectedMeasuringPointId ? { ...point, x: x, y: y } : point,
+    );
+    setMeasuringPoints(updatedMeasuringPoints);
+  };
+
+  const graphOnClick = (event: ChartEvent) => {
+    if (!chartRef.current) return;
+
+    // FIXME: Chart初期化時の処理をオブジェクトベタ書きしているため、型エラーが出る。後で直す
+    // @ts-expect-error
+    const canvasPosition = getRelativePosition(event, chartRef.current);
+
+    // Substitute the appropriate scale IDs
+    const dataX = chartRef.current.scales.x.getValueForPixel(canvasPosition.x);
+    const dataY = chartRef.current.scales.y.getValueForPixel(canvasPosition.y);
+    if (dataX === undefined || dataY === undefined) return;
+    updateMeasuringPoint(dataX, dataY);
   };
 
   return (
@@ -526,11 +526,13 @@ export const VideoUploader: React.FC = () => {
       <button onClick={handlePlay}>Play</button>
       <button onClick={handlePause}>Pause</button>
 
-      <button onClick={() => updateMeasuringPoint(new MeasuringPoint(1, "hoge", 1, 1))}>tmp</button>
-
       <div>selected: {selectedMeasuringPointId}</div>
       {/* MeasuringPointの一覧 */}
-      <MeasuringPointTable measuringPoints={measuringPoints} setSelectedMeasuringPointId={setSelectedMeasuringPointId} />
+      <MeasuringPointTable
+        measuringPoints={measuringPoints}
+        selectedMeasuringPointId={selectedMeasuringPointId}
+        setSelectedMeasuringPointId={setSelectedMeasuringPointId}
+      />
 
       {/* 現在フレームの輝度 */}
       <p>Brightness: {frameDataList.length}</p>

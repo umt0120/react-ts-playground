@@ -6,10 +6,16 @@ import { getNearestRectangle } from "../lib/rectangle";
 // import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, LineController } from "chart.js";
 import { getRelativePosition } from "chart.js/helpers";
 import { MeasuringPointTable } from "./MeasuringPointTable";
+import { RootState } from "../app/store";
+import { useSelector, useDispatch } from "react-redux";
+
+import { updateMeasuringPoint } from "./graph/measuringPointsSlice";
 
 Chart.register(...registerables);
 
 export const VideoUploader: React.FC = () => {
+  const dispatch = useDispatch();
+
   // ========== Video関連 ==========
   // Video要素の参照
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -69,14 +75,13 @@ export const VideoUploader: React.FC = () => {
   const [draggingMousePosition, setDraggingMousePosition] = useState<MousePosition>(MousePosition.OutSide);
 
   // ========== 計測点関連 ==========
-  const [measuringPoints, setMeasuringPoints] = useState<MeasuringPoint[]>([
-    new MeasuringPoint(1, "nodule_base", 0.0, 0.0),
-    new MeasuringPoint(2, "nodule_peak", 0.0, 0.0),
-    new MeasuringPoint(3, "nodule_end", 0.0, 0.0),
-    new MeasuringPoint(4, "parenchyma_base", 0.0, 0.0),
-    new MeasuringPoint(5, "parenchyma_peak", 0.0, 0.0),
-  ]);
-  const [selectedMeasuringPointId, setSelectedMeasuringPointId] = useState<number | null>(null);
+  // 計測点の一覧
+  const measuringPoints = useSelector((state: RootState) => state.measuringPoints);
+  // 選択された計測点のID
+  const selectedMeasuringPointId = useSelector((state: RootState) => state.measuringPoints.selectedMeasuringPointId);
+  // 選択された計測点のIDを記憶するための参照
+  // NOTE: グラフに設定したコールバックから参照させるために、stateの値をuseRefで参照する形にしている
+  const selectedMeasuringPointIdRef = useRef<number | null>(null);
 
   // ========== useEffect ==========
   // デバイスが選択されたら、最初のデバイスを選択するuseEffect
@@ -244,12 +249,14 @@ export const VideoUploader: React.FC = () => {
         label: data.rectangle.name,
         data: data.frameData.map((frameData) => ({ x: frameData.timestamp, y: frameData.averageLuminance })),
         borderColor: data.rectangle.color,
+        pointStyle: 'rectRot',
         fill: false,
       }));
       chartDatasets.push({
         label: "Point1",
         data: [{ x: 10, y: 10 }],
-        borderColor: "black",
+        borderColor: "red",
+        pointStyle: 'rectRot',
         fill: false,
       });
       // 輝度グラフを描画
@@ -282,11 +289,34 @@ export const VideoUploader: React.FC = () => {
               max: 255,
             },
           },
-          onClick: graphOnClick,
+          onClick: (event: ChartEvent) => {
+            if (!chartRef.current) return;
+            if (!selectedMeasuringPointIdRef.current) return;
+
+            // FIXME: Chart初期化時の処理をオブジェクトベタ書きしているため、型エラーが出る。後で直す
+            // @ts-expect-error
+            const canvasPosition = getRelativePosition(event, chartRef.current);
+
+            // Substitute the appropriate scale IDs
+            const dataX = chartRef.current.scales.x.getValueForPixel(canvasPosition.x);
+            const dataY = chartRef.current.scales.y.getValueForPixel(canvasPosition.y);
+            if (dataX === undefined || dataY === undefined) return;
+            measuringPoints.measuringPoints.map((point) => {
+              if (point.id === selectedMeasuringPointIdRef.current) {
+                const updatedPoint: MeasuringPoint = { ...point, x: dataX, y: dataY };
+                dispatch(updateMeasuringPoint(updatedPoint));
+              }
+            });
+          },
         },
       });
     }
   }, []);
+
+  // 計測点が選択されたら、選択された計測点のIDを記憶するuseEffect
+  useEffect(() => {
+    selectedMeasuringPointIdRef.current = selectedMeasuringPointId;
+  }, [selectedMeasuringPointId]);
 
   // x軸の最大値が変更されたら、グラフのx軸の最大値を変更するuseEffect
   useEffect(() => {
@@ -476,28 +506,6 @@ export const VideoUploader: React.FC = () => {
     }
   };
 
-  // 計測点の情報を更新する関数
-  const updateMeasuringPoint = (x: number, y: number) => {
-    const updatedMeasuringPoints = measuringPoints.map((point) =>
-      point.id === selectedMeasuringPointId ? { ...point, x: x, y: y } : point,
-    );
-    setMeasuringPoints(updatedMeasuringPoints);
-  };
-
-  const graphOnClick = (event: ChartEvent) => {
-    if (!chartRef.current) return;
-
-    // FIXME: Chart初期化時の処理をオブジェクトベタ書きしているため、型エラーが出る。後で直す
-    // @ts-expect-error
-    const canvasPosition = getRelativePosition(event, chartRef.current);
-
-    // Substitute the appropriate scale IDs
-    const dataX = chartRef.current.scales.x.getValueForPixel(canvasPosition.x);
-    const dataY = chartRef.current.scales.y.getValueForPixel(canvasPosition.y);
-    if (dataX === undefined || dataY === undefined) return;
-    updateMeasuringPoint(dataX, dataY);
-  };
-
   return (
     <div>
       {/* 画像入力 */}
@@ -528,11 +536,7 @@ export const VideoUploader: React.FC = () => {
 
       <div>selected: {selectedMeasuringPointId}</div>
       {/* MeasuringPointの一覧 */}
-      <MeasuringPointTable
-        measuringPoints={measuringPoints}
-        selectedMeasuringPointId={selectedMeasuringPointId}
-        setSelectedMeasuringPointId={setSelectedMeasuringPointId}
-      />
+      <MeasuringPointTable />
 
       {/* 現在フレームの輝度 */}
       <p>Brightness: {frameDataList.length}</p>

@@ -1,9 +1,7 @@
 import React, { useRef, useEffect, useState } from "react";
-// import { Chart } from "chart.js/auto";
-import { Chart, ChartEvent, registerables } from "chart.js";
+import { Chart, ChartEvent, registerables, ChartDataset, ChartConfiguration, Point } from "chart.js";
 import { Rectangle, FrameData, MousePosition, MeasuringPoint } from "../types/common";
 import { getNearestRectangle } from "../lib/rectangle";
-// import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, LineController } from "chart.js";
 import { getRelativePosition } from "chart.js/helpers";
 import { MeasuringPointTable } from "./MeasuringPointTable";
 import { RootState } from "../app/store";
@@ -243,28 +241,24 @@ export const VideoUploader: React.FC = () => {
     if (chartRef.current === null && frameDataList.length > 0) {
       // 輝度グラフへの参照を取得
       const ctx = document.getElementById("luminanceChart") as HTMLCanvasElement;
-      // 輝度グラフのデータ
-      // TODO: 点を描画する場合はここでデータを追加すれば良い
-      const chartDatasets = frameDataList.map((data) => ({
+      const chartDefaultDataset: ChartDataset<"line">[] = frameDataList.map((data) => ({
         label: data.rectangle.name,
-        data: data.frameData.map((frameData) => ({ x: frameData.timestamp, y: frameData.averageLuminance })),
+        data: data.frameData.map((frameData) => ({ x: frameData.timestamp, y: frameData.averageLuminance }) as Point),
         borderColor: data.rectangle.color,
-        pointStyle: 'rectRot',
         fill: false,
       }));
-      chartDatasets.push({
-        label: "Point1",
-        data: [{ x: 10, y: 10 }],
-        borderColor: "red",
-        pointStyle: 'rectRot',
-        fill: false,
-      });
-      // 輝度グラフを描画
-      chartRef.current = new Chart(ctx, {
+
+      const chartDefaultPointDataset: ChartDataset<"line">[] = measuringPoints.measuringPoints.map((point) => ({
+        label: point.name,
+        data: [{ x: point.x, y: point.y } as Point],
+        borderColor: point.borderColor,
+        pointStyle: point.pointStyle,
+      }));
+
+      const chartConfig: ChartConfiguration<"line"> = {
         type: "line",
         data: {
-          labels: [],
-          datasets: chartDatasets,
+          datasets: chartDefaultDataset.concat(chartDefaultPointDataset),
         },
         options: {
           // パフォーマンス優先のため、アニメーションを無効にする
@@ -303,13 +297,24 @@ export const VideoUploader: React.FC = () => {
             if (dataX === undefined || dataY === undefined) return;
             measuringPoints.measuringPoints.map((point) => {
               if (point.id === selectedMeasuringPointIdRef.current) {
+                // Storeに保存している計測点の座標を更新
                 const updatedPoint: MeasuringPoint = { ...point, x: dataX, y: dataY };
                 dispatch(updateMeasuringPoint(updatedPoint));
+                // 輝度グラフのデータを更新
+                chartRef.current?.data.datasets.forEach((dataset) => {
+                  if (dataset.label === point.name) {
+                    dataset.data = [{ x: dataX, y: dataY } as Point];
+                  }
+                });
+                chartRef.current?.update();
               }
             });
           },
         },
-      });
+      };
+
+      // 輝度グラフを描画
+      chartRef.current = new Chart(ctx, chartConfig);
     }
   }, []);
 

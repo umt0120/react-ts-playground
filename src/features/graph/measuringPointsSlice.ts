@@ -1,15 +1,21 @@
 import { PayloadAction, createSlice } from "@reduxjs/toolkit";
-import { MeasuringPoint } from "../../types/common";
+import type { MeasuringPoint } from "../../types/common";
+import type { Color, PointStyle } from "chart.js";
 
 const initialState = {
   measuringPoints: [
-    {id: 1, name: "nodule_base", x: 0.0, y: 0.0},
-    {id: 2, name: "nodule_peak",x:  0.0, y: 0.0},
-    {id: 3, name: "nodule_end",x:  0.0,y:  0.0},
-    {id: 4, name: "parenchyma_base",x:  0.0,y:  0.0},
-    {id: 5, name: "parenchyma_peak",x:  0.0,y:  0.0},
-
-
+    { id: 1, name: "nodule_base", borderColor: "red" as Color, pointStyle: "rect" as PointStyle, x: 0.0, y: 0.0 },
+    { id: 2, name: "nodule_peak", borderColor: "red" as Color, pointStyle: "circle" as PointStyle, x: 0.0, y: 0.0 },
+    { id: 3, name: "nodule_end", borderColor: "red" as Color, pointStyle: "star" as PointStyle, x: 0.0, y: 0.0 },
+    { id: 4, name: "parenchyma_base", borderColor: "blue" as Color, pointStyle: "rect" as PointStyle, x: 0.0, y: 0.0 },
+    {
+      id: 5,
+      name: "parenchyma_peak",
+      borderColor: "blue" as Color,
+      pointStyle: "circle" as PointStyle,
+      x: 0.0,
+      y: 0.0,
+    },
   ],
   selectedMeasuringPointId: 1,
 };

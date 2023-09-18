@@ -16,7 +16,7 @@ export const MeasuringPointTable = () => {
       </thead>
       <tbody>
         {measuringPoints.measuringPoints.map((point) => (
-          <MeasuringPointRow key={point.id} point={point} />
+          <MeasuringPointRow key={point.parentId} point={point} />
         ))}
       </tbody>
     </table>

@@ -3,6 +3,7 @@ import type { PointStyle, Color } from "chart.js";
 export class Rectangle {
   id: number;
   name: string;
+  category: TICDataCategory;
   color: string;
   borderThickness: number;
   x: number;
@@ -12,6 +13,7 @@ export class Rectangle {
   constructor(
     id: number,
     name: string,
+    category: TICDataCategory,
     color: string,
     borderThickness: number,
     x: number,
@@ -21,6 +23,7 @@ export class Rectangle {
   ) {
     this.id = id;
     this.name = name;
+    this.category = category;
     this.color = color;
     this.borderThickness = borderThickness;
     this.x = x;
@@ -30,6 +33,12 @@ export class Rectangle {
   }
 }
 
+export const TICDataCategory = {
+  Nodule: "Nodule",
+  Parenchyma: "Parenchyma",
+} as const;
+export type TICDataCategory = (typeof TICDataCategory)[keyof typeof TICDataCategory];
+
 export class FrameData {
   timestamp: number; // milliseconds
   averageLuminance: number;
@@ -38,6 +47,14 @@ export class FrameData {
     this.averageLuminance = averageLuminance;
   }
 }
+
+export const MeasuringPosition = {
+  Base: "Base",
+  Peak: "Peak",
+  End: "End",
+} as const;
+
+export type MeasuringPosition = (typeof MeasuringPosition)[keyof typeof MeasuringPosition];
 
 /**
  * グラフ上の計測点を表すクラス.
@@ -49,15 +66,28 @@ export class FrameData {
  *
  */
 export class MeasuringPoint {
-  id: number;
+  parentId: number;
   name: string;
+  category: TICDataCategory;
+  position: MeasuringPosition;
   borderColor: Color;
   pointStyle: PointStyle;
   x: number;
   y: number;
-  constructor(id: number, name: string, borderColor: Color, pointStyle: PointStyle, x: number, y: number) {
-    this.id = id;
+  constructor(
+    parentId: number,
+    name: string,
+    category: TICDataCategory,
+    position: MeasuringPosition,
+    borderColor: Color,
+    pointStyle: PointStyle,
+    x: number,
+    y: number,
+  ) {
+    this.parentId = parentId;
     this.name = name;
+    this.category = category;
+    this.position = position;
     this.borderColor = borderColor;
     this.pointStyle = pointStyle;
     this.x = x;

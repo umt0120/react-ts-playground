@@ -1,18 +1,33 @@
 import React, { useRef, useEffect, useState } from "react";
 import { Chart, ChartEvent, registerables, ChartDataset, ChartConfiguration, Point } from "chart.js";
-import { Rectangle, FrameData, MousePosition, MeasuringPoint } from "../types/common";
+import { FrameData, MousePosition, MeasuringPoint, Rectangle } from "../types/common";
 import { getNearestRectangle } from "../lib/rectangle";
 import { getRelativePosition } from "chart.js/helpers";
 import { MeasuringPointTable } from "./MeasuringPointTable";
 import { RootState } from "../app/store";
-import { useSelector, useDispatch } from "react-redux";
+import { useAppSelector, useAppDispatch } from "../app/hooks";
 
-import { updateMeasuringPoint } from "./graph/measuringPointsSlice";
+// import { updateMeasuringPoint } from "./graph/measuringPointsSlice";
+import { updateMeasuringPoint, pushFrameData } from "./tic/ticDataSlice";
 
 Chart.register(...registerables);
 
 export const VideoUploader: React.FC = () => {
-  const dispatch = useDispatch();
+  const dispatch = useAppDispatch();
+  const ticData = useAppSelector((state: RootState) => state.ticData);
+
+  // ROIの輝度データの総数
+  const totalFrameDataLengths = useAppSelector((state: RootState) => {
+    return state.ticData.reduce((acc, cur) => acc + cur.frameData.length, 0);
+  });
+
+  // roi一覧
+  const rectangles = useAppSelector((state: RootState) => {
+    return state.ticData.reduce<Rectangle[]>((acc, cur) => {
+      acc.push(cur.roi);
+      return acc;
+    }, []);
+  });
 
   // ========== Video関連 ==========
   // Video要素の参照
@@ -42,41 +57,43 @@ export const VideoUploader: React.FC = () => {
   // Canvas要素の参照
   const canvasRef = useRef<HTMLCanvasElement>(null);
   // ROIの参照リスト
-  const rectangleRef = useRef<Rectangle[]>([
-    new Rectangle(1, "Nodule", "red", 2, 50, 50, 100, 100),
-    new Rectangle(2, "Parenchyma", "blue", 2, 100, 50, 100, 100),
-  ]);
+  // const rectangleRef = useRef<Rectangle[]>([
+  //   new Rectangle(1, "Nodule", "red", 2, 50, 50, 100, 100),
+  //   new Rectangle(2, "Parenchyma", "blue", 2, 100, 50, 100, 100),
+  // ]);
 
   // ROIの輝度データ
-  const [frameDataList, setFrameDataList] = useState<{ rectangle: Rectangle; frameData: FrameData[] }[]>([
-    {
-      rectangle: { id: 1, name: "Nodule", color: "red", borderThickness: 2, x: 50, y: 50, width: 100, height: 100 },
-      frameData: [],
-    },
-    {
-      rectangle: {
-        id: 2,
-        name: "Parenchyma",
-        color: "blue",
-        borderThickness: 2,
-        x: 100,
-        y: 50,
-        width: 100,
-        height: 100,
-      },
-      frameData: [],
-    },
-  ]);
+  // const [frameDataList, setFrameDataList] = useState<{ rectangle: Rectangle; frameData: FrameData[] }[]>([
+  //   {
+  //     rectangle: { id: 1, name: "Nodule", color: "red", borderThickness: 2, x: 50, y: 50, width: 100, height: 100 },
+  //     frameData: [],
+  //   },
+  //   {
+  //     rectangle: {
+  //       id: 2,
+  //       name: "Parenchyma",
+  //       color: "blue",
+  //       borderThickness: 2,
+  //       x: 100,
+  //       y: 50,
+  //       width: 100,
+  //       height: 100,
+  //     },
+  //     frameData: [],
+  //   },
+  // ]);
+
   // ROIの輝度データの総数
-  const totalFrameDataLengths = frameDataList.reduce((prev, current) => prev + current.frameData.length, 0);
+  // const totalFrameDataLengths = frameDataList.reduce((prev, current) => prev + current.frameData.length, 0);
+
   // ROIがドラッグ中かどうか
   const [draggingMousePosition, setDraggingMousePosition] = useState<MousePosition>(MousePosition.OutSide);
 
   // ========== 計測点関連 ==========
   // 計測点の一覧
-  const measuringPoints = useSelector((state: RootState) => state.measuringPoints);
+  const measuringPoints = useAppSelector((state: RootState) => state.measuringPoints);
   // 選択された計測点のID
-  const selectedMeasuringPointId = useSelector((state: RootState) => state.measuringPoints.selectedMeasuringPointId);
+  const selectedMeasuringPointId = useAppSelector((state: RootState) => state.measuringPoints.selectedMeasuringPointId);
   // 選択された計測点のIDを記憶するための参照
   // NOTE: グラフに設定したコールバックから参照させるために、stateの値をuseRefで参照する形にしている
   const selectedMeasuringPointIdRef = useRef<number | null>(null);
@@ -110,7 +127,7 @@ export const VideoUploader: React.FC = () => {
       const mouseY = event.clientY - rect.top;
 
       // マウスの位置から最も近いROIと、当該ROIとマウス座標の位置関係を取得
-      const { mousePosition } = getNearestRectangle(mouseX, mouseY, rectangleRef.current);
+      const { mousePosition } = getNearestRectangle(mouseX, mouseY, rectangles);
       setDraggingMousePosition(mousePosition);
       // マウスの位置によってカーソルの形状を変更
       changeCursorStyleOnCanvas(canvas, mousePosition);
@@ -118,12 +135,12 @@ export const VideoUploader: React.FC = () => {
 
     // マウス移動時のコールバック
     const handleMouseMove = (event: MouseEvent) => {
-      //　マウスの位置を取得
+      // マウスの位置を取得
       const mouseX = event.clientX - rect.left;
       const mouseY = event.clientY - rect.top;
 
       // マウスの位置から最も近いROIと、当該ROIとマウス座標の位置関係を取得
-      const { rectangle } = getNearestRectangle(mouseX, mouseY, rectangleRef.current);
+      const { rectangle } = getNearestRectangle(mouseX, mouseY, rectangles);
 
       // マウスダウン時に記憶しておいた、最寄りのROIに対するマウスの位置関係によって処理を分岐
       switch (draggingMousePosition) {
@@ -194,7 +211,7 @@ export const VideoUploader: React.FC = () => {
       // ビデオの現在の時刻を取得(秒)
       const currentTimestamp = video.currentTime;
       // ROIごとに輝度を計算
-      rectangleRef.current.forEach((rectangle) => {
+      rectangles.forEach((rectangle) => {
         // ROIの枠線を描画
         context.strokeStyle = rectangle.color;
         context.lineWidth = rectangle.borderThickness;
@@ -208,16 +225,17 @@ export const VideoUploader: React.FC = () => {
           timestamp: currentTimestamp,
           averageLuminance: averageLuminance,
         };
+        pushFrameData({ category: rectangle.category, frameData: frameData });
         // ROIの輝度データを保存
-        setFrameDataList((prev) => {
-          // idが一致するROIのデータを取得
-          const index = prev.findIndex((data) => data.rectangle.id === rectangle.id);
-          if (index !== -1) {
-            // ROIの輝度データを追加
-            prev[index].frameData.push(frameData);
-          }
-          return prev;
-        });
+        // setFrameDataList((prev) => {
+        //   // idが一致するROIのデータを取得
+        //   const index = prev.findIndex((data) => data.rectangle.id === rectangle.id);
+        //   if (index !== -1) {
+        //     // ROIの輝度データを追加
+        //     prev[index].frameData.push(frameData);
+        //   }
+        //   return prev;
+        // });
       });
       // 再帰的に次のフレームの描画をリクエスト
       requestAnimationFrame(drawFrame);
@@ -234,17 +252,17 @@ export const VideoUploader: React.FC = () => {
       canvas.removeEventListener("mouseup", handleMouseUp);
       canvas.addEventListener("mouseleave", handleMouseUp);
     };
-  }, [draggingMousePosition]);
+  }, [draggingMousePosition, rectangles]);
 
   // 輝度グラフの描画を行うuseEffect
   useEffect(() => {
-    if (chartRef.current === null && frameDataList.length > 0) {
+    if (chartRef.current === null && ticData.length > 0) {
       // 輝度グラフへの参照を取得
       const ctx = document.getElementById("luminanceChart") as HTMLCanvasElement;
-      const chartDefaultDataset: ChartDataset<"line">[] = frameDataList.map((data) => ({
-        label: data.rectangle.name,
+      const chartDefaultDataset: ChartDataset<"line">[] = ticData.map((data) => ({
+        label: data.name,
         data: data.frameData.map((frameData) => ({ x: frameData.timestamp, y: frameData.averageLuminance }) as Point),
-        borderColor: data.rectangle.color,
+        borderColor: data.roi.color,
         fill: false,
       }));
 
@@ -286,9 +304,7 @@ export const VideoUploader: React.FC = () => {
           onClick: (event: ChartEvent) => {
             if (!chartRef.current) return;
             if (!selectedMeasuringPointIdRef.current) return;
-
-            // FIXME: Chart初期化時の処理をオブジェクトベタ書きしているため、型エラーが出る。後で直す
-            // @ts-expect-error
+            // @ts-expect-error chart.jsの型定義に存在しないため、@ts-expect-errorで無視
             const canvasPosition = getRelativePosition(event, chartRef.current);
 
             // Substitute the appropriate scale IDs
@@ -296,12 +312,12 @@ export const VideoUploader: React.FC = () => {
             const dataY = chartRef.current.scales.y.getValueForPixel(canvasPosition.y);
             if (dataX === undefined || dataY === undefined) return;
             measuringPoints.measuringPoints.map((point) => {
-              if (point.id === selectedMeasuringPointIdRef.current) {
+              if (point.parentId === selectedMeasuringPointIdRef.current) {
                 // Storeに保存している計測点の座標を更新
                 const updatedPoint: MeasuringPoint = { ...point, x: dataX, y: dataY };
                 dispatch(updateMeasuringPoint(updatedPoint));
                 // 輝度グラフのデータを更新
-                chartRef.current?.data.datasets.forEach((dataset) => {
+                chartRef.current?.data.datasets.forEach((dataset: ChartDataset) => {
                   if (dataset.label === point.name) {
                     dataset.data = [{ x: dataX, y: dataY } as Point];
                   }
@@ -316,7 +332,7 @@ export const VideoUploader: React.FC = () => {
       // 輝度グラフを描画
       chartRef.current = new Chart(ctx, chartConfig);
     }
-  }, []);
+  });
 
   // 計測点が選択されたら、選択された計測点のIDを記憶するuseEffect
   useEffect(() => {
@@ -338,13 +354,13 @@ export const VideoUploader: React.FC = () => {
 
   // 輝度グラフのデータを更新するuseEffect
   useEffect(() => {
-    if (chartRef.current && frameDataList.length > 0) {
+    if (chartRef.current && ticData.length > 0) {
       // フレームごとの輝度データごとに
-      frameDataList.forEach((data) => {
+      ticData.forEach((data) => {
         // 輝度グラフのデータを更新
-        chartRef.current?.data.datasets.forEach((dataset) => {
+        chartRef.current?.data.datasets.forEach((dataset: ChartDataset) => {
           // ROIの名前が一致するデータセットを探す
-          if (dataset.label === data.rectangle.name) {
+          if (dataset.label === data.roi.name) {
             // データを更新
             dataset.data = data.frameData.map((frameData) => ({
               x: frameData.timestamp,
@@ -544,7 +560,7 @@ export const VideoUploader: React.FC = () => {
       <MeasuringPointTable />
 
       {/* 現在フレームの輝度 */}
-      <p>Brightness: {frameDataList.length}</p>
+      <p>Brightness: {totalFrameDataLengths}</p>
 
       <div style={{ width: "640px" }}>
         {/* シークバー */}
